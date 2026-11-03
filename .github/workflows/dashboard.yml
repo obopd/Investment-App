@@ -1,0 +1,48 @@
+name: Dashboard
+# Publishes /dashboard to GitHub Pages. The Supabase URL and the publishable (read-only) key
+# are written into config.js here, so they never need to be pasted into the code.
+on:
+  push:
+    branches: [main]
+    paths: ["dashboard/**", ".github/workflows/dashboard.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Write config.js
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "Add the SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY repository secrets first."; exit 1
+          fi
+          case "$SUPABASE_PUBLISHABLE_KEY" in
+            sb_secret_*) echo "That is the SECRET key. Use the publishable key here."; exit 1;;
+          esac
+          python3 - <<'PY'
+          import json, os
+          url = os.environ["SUPABASE_URL"].strip().rstrip("/")
+          key = os.environ["SUPABASE_PUBLISHABLE_KEY"].strip()
+          with open("dashboard/config.js", "w") as f:
+              f.write(f"export const SUPABASE_URL = {json.dumps(url)};\nexport const SUPABASE_KEY = {json.dumps(key)};\n")
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dashboard
+      - id: deployment
+        uses: actions/deploy-pages@v4

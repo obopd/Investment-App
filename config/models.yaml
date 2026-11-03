@@ -1,11 +1,33 @@
-# Used from Phase 2. Model names live here only, never in code.
-# Prices are USD per million tokens; check the provider's pricing page and update if they change.
+# AI settings. Model names live here only, never in code.
+#
+# mode:
+#   practice -> fake AI answers, $0. The whole app runs so you can see it working, but
+#               decisions are placeholders. Teams are labelled "(practice)".
+#   live     -> real AI calls (needs ANTHROPIC_API_KEY in GitHub Secrets). Switching to live
+#               retires practice teams and starts fresh teams with fresh imaginary money.
+mode: practice
+
 providers:
   anthropic:
     api_key_env: ANTHROPIC_API_KEY
+
+# USD per million tokens (checked 2026-11). Update if the provider changes prices.
+# Thinking tokens are billed as output tokens; the budget guard counts them.
 models:
-  cheap:  {provider: anthropic, model: claude-haiku-5-5,  input_per_mtok: 1.00, output_per_mtok: 5.00}
-  strong: {provider: anthropic, model: claude-sonnet-5-5, input_per_mtok: 3.00, output_per_mtok: 15.00}
+  cheap:
+    provider: anthropic
+    model: claude-haiku-5-5
+    input_per_mtok: 0.10
+    output_per_mtok: 0.50
+    effort: low
+  strong:
+    provider: anthropic
+    model: claude-sonnet-5-5
+    input_per_mtok: 2.00
+    output_per_mtok: 10.00
+    effort: medium
+
+# "Balanced" setup: cheap model reads news and debates, stronger model makes the final call.
 roles:
   fact_cards: cheap
   post_mortem: cheap

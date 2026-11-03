@@ -42,6 +42,7 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}   # optional; only used in live mode
           # Inputs are passed via env (not inlined) so they can't inject shell commands.
           INPUT_DATE: ${{ inputs.date }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}

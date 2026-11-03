@@ -1,3 +1,4 @@
-# Used from Phase 2. Hard caps in USD; the budget guard checks before every AI call.
-monthly_cap_usd: 20.00
-per_run_cap_usd: 1.50
+# Hard caps in USD. Before every AI call the guard assumes the worst case (max output) and
+# skips the call if either cap could be exceeded. Non-AI steps keep running.
+monthly_cap_usd: 5.00
+per_run_cap_usd: 0.50

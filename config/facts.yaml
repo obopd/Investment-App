@@ -1,0 +1,6 @@
+# Fact-card extraction (cheap model).
+batch_size: 10            # articles per AI call
+max_articles_per_run: 150 # backlog limit; keeps each run's cost small
+max_age_days: 3           # older unprocessed articles are skipped, never processed later
+dedupe_similarity: 0.8    # word-overlap above this = same claim, recorded as another source
+dedupe_window_days: 7

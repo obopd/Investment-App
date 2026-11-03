@@ -49,3 +49,17 @@ def test_select_builds_filters():
 def test_url_with_rest_path_is_accepted():
     for url in ("https://x.supabase.co", "https://x.supabase.co/", "https://x.supabase.co/rest/v1/"):
         assert SupabaseDB(url, "k", Recorder()).base == "https://x.supabase.co/rest/v1"
+
+
+def test_select_without_limit_pages_through_everything():
+    class Paged(Recorder):
+        def get(self, url, **kw):
+            off = int(kw["params"]["offset"])
+            n = 1000 if off < 2000 else 7
+            r = FakeResponse(200, "[" + ",".join('{"a":1}' for _ in range(n)) + "]", url)
+            r.request = type("Req", (), {"method": "GET"})()
+            self.calls.append(kw["params"]["offset"])
+            return r
+    rec = Paged()
+    rows = SupabaseDB("https://x.supabase.co", "k", rec).select("llm_usage", {"id": ("in", [1, 2])})
+    assert len(rows) == 2007 and rec.calls == ["0", "1000", "2000"]

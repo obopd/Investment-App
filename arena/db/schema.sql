@@ -235,6 +235,29 @@ create table if not exists llm_usage (
   created_at     timestamptz not null default now()
 );
 
+-- ---------- Phase 2 additions ----------
+alter table articles   add column if not exists facts_extracted_at timestamptz;
+alter table fact_cards add column if not exists published_at timestamptz;
+alter table portfolios add column if not exists brake_active boolean not null default false;
+alter table portfolios add column if not exists start_date date;
+create index if not exists fact_cards_published_at_idx on fact_cards (published_at);
+create index if not exists articles_unprocessed_idx on articles (published_at) where facts_extracted_at is null;
+
+create table if not exists leaderboard (
+  key           text primary key,          -- 'team:<id>' or 'SPY'
+  team_id       bigint references teams(id),
+  name          text not null,
+  is_benchmark  boolean not null default false,
+  start_date    date,
+  as_of         date,
+  equity        double precision,
+  total_return  double precision,
+  sharpe        double precision,
+  max_drawdown  double precision,
+  trades        integer not null default 0,
+  updated_at    timestamptz not null default now()
+);
+
 -- ---------- Security ----------
 do $$
 declare
@@ -243,12 +266,13 @@ declare
     'stocks', 'prices_daily', 'sources', 'articles', 'fact_cards', 'fact_card_sources',
     'claim_evaluations', 'teams', 'portfolios', 'positions', 'runs', 'decisions', 'orders',
     'trades', 'closed_trades', 'post_mortems', 'lessons', 'equity_daily', 'benchmark_daily',
-    'llm_usage'];
+    'llm_usage', 'leaderboard'];
   -- Everything the dashboard shows. prices_daily is deliberately missing (data license).
   display_tables text[] := array[
     'stocks', 'sources', 'articles', 'fact_cards', 'fact_card_sources', 'claim_evaluations',
     'teams', 'portfolios', 'positions', 'runs', 'decisions', 'orders', 'trades',
-    'closed_trades', 'post_mortems', 'lessons', 'equity_daily', 'benchmark_daily', 'llm_usage'];
+    'closed_trades', 'post_mortems', 'lessons', 'equity_daily', 'benchmark_daily', 'llm_usage',
+    'leaderboard'];
 begin
   foreach t in array all_tables loop
     execute format('alter table %I enable row level security', t);
