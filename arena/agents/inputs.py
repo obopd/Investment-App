@@ -5,6 +5,8 @@ from datetime import date, timedelta
 
 from arena.lookahead import (LookAheadError, assert_no_lookahead, decision_cutoff, to_utc,
                              visible_items, visible_prices)
+from arena import config
+from arena.learning.lessons import top_lessons
 from arena.sim.executor import load_bars, load_portfolio
 
 
@@ -82,8 +84,10 @@ def build_inputs(db, team_cfg: dict, team_id: int, run_date: date, tickers: list
         if len(shown) >= team_cfg.get("max_fact_cards_in_prompt", 40):
             break
 
+    lessons = top_lessons(db, team_id, bool(team_cfg.get("shared_lessons")), cutoff,
+                          team_cfg.get("lessons_in_prompt", config.load("learning")["lessons_in_prompt"]))
     inputs = {"date": run_date, "cutoff": cutoff, "prices": prices, "fact_cards": shown,
-              "portfolio": load_portfolio(db, team_id), "lessons": []}  # lessons: Phase 3
+              "portfolio": load_portfolio(db, team_id), "lessons": lessons}
     check_inputs(inputs)
     return inputs
 

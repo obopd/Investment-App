@@ -86,12 +86,17 @@ def execute_orders(db, team_id: int, run_date: date, risk_cfg: dict, benchmark: 
                                               "reason": (o.get("reason") or "") + (" (reduced to fit cash)" if f.reduced else "")})
         if lot:
             spy = _spy_return(db, benchmark, lot.entry_date, for_date)
+            # The decision that opened the position: its lessons get scored when the trade closes.
+            opened = db.select("orders", {"team_id": team_id, "ticker": lot.ticker, "side": "buy",
+                                          "status": "filled", "for_date": lot.entry_date},
+                               columns="decision_id", order="id.asc", limit=1)
             db.insert("closed_trades", [{
                 "team_id": team_id, "ticker": lot.ticker, "shares": lot.shares,
                 "entry_date": lot.entry_date, "entry_price": lot.entry_price,
                 "exit_date": for_date, "exit_price": lot.exit_price, "pnl": lot.pnl,
                 "pnl_pct": lot.pnl_pct, "holding_days": (for_date - lot.entry_date).days,
-                "benchmark_return": spy, "exit_decision_id": o.get("decision_id")}])
+                "benchmark_return": spy, "exit_decision_id": o.get("decision_id"),
+                "entry_decision_id": opened[0]["decision_id"] if opened else None}])
         summary["filled"] += 1
     save_portfolio(db, team_id, pf)
     return summary

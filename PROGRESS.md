@@ -23,11 +23,18 @@
 - Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
 - Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
 - Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
-- 72 tests passing, including a multi-day simulation.
+- 82 tests passing, including a multi-day simulation.
 - Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
 
-## Next — Phase 3
-Post-mortems after every closed trade, lesson book with scoring, lesson book page.
+## Done — Phase 3 (post-mortems and lesson book)
+- Every closed trade (each sell) gets a post-mortem from the cheap model: what happened, right/wrong, what was missed, and ONE lesson ("When <condition>, <action>."). Generic or multi-sentence lessons are rejected and retried once.
+- Lesson score = (helpful + 1) / (used + 2): starts at 0.5. "Used" = closed trades whose opening decision had the lesson in its prompt; "helpful" = those that beat SPY over the same period. Scored once per closed trade, together with its post-mortem.
+- Top 10 active lessons (written before the decision time) go into the analyst's prompt; each decision records which lessons it saw.
+- Lessons with ≥4 uses and score < 0.35 are deactivated (never deleted); near-duplicates are merged; max 30 active per team. Settings in `config/learning.yaml`. Shared book via `shared_lessons: true` in a team's config.
+- Dashboard: Lesson book tab (book icon) with scores, usage, inactive lessons and recent reviews.
+
+## Next — Phase 4
+Source trust scoring and corroboration, plus source trust page.
 
 ## Data sources and terms
 - **Tiingo** (prices): free plan is for personal/non-commercial use; raw data may not be redistributed. So `prices_daily` is not readable with the public dashboard key. Free limits are roughly 50 requests/hour and 1,000/day; a daily run uses ~31.
