@@ -1,0 +1,15 @@
+# Used from Phase 2. Model names live here only, never in code.
+# Prices are USD per million tokens; check the provider's pricing page and update if they change.
+providers:
+  anthropic:
+    api_key_env: ANTHROPIC_API_KEY
+models:
+  cheap:  {provider: anthropic, model: claude-haiku-5-5,  input_per_mtok: 1.00, output_per_mtok: 5.00}
+  strong: {provider: anthropic, model: claude-sonnet-5-5, input_per_mtok: 3.00, output_per_mtok: 15.00}
+roles:
+  fact_cards: cheap
+  post_mortem: cheap
+  analyst: cheap
+  bull: cheap
+  bear: cheap
+  judge: strong

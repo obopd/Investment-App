@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel><title>Test Wire</title>
+<item>
+  <title>Apple (NASDAQ: AAPL) beats estimates &amp; raises guidance</title>
+  <link>https://news.example.com/apple-beats?utm_source=rss&amp;id=7</link>
+  <description>&lt;p&gt;Apple reported record revenue.&lt;/p&gt;</description>
+  <pubDate>Mon, 02 Nov 2026 21:35:00 +0000</pubDate>
+</item>
+<item>
+  <title>Pineapple prices rise; Exxon and Chevron watch oil</title>
+  <link>https://news.example.com/oil</link>
+  <description>Energy roundup.</description>
+  <pubDate>Mon, 02 Nov 2026 15:00:00 +0000</pubDate>
+</item>
+<item>
+  <title>Item without a date</title>
+  <link>https://news.example.com/nodate</link>
+  <description>No pubDate here.</description>
+</item>
+<item>
+  <title>Item dated in the future</title>
+  <link>https://news.example.com/future</link>
+  <pubDate>Fri, 01 Jan 2100 00:00:00 +0000</pubDate>
+</item>
+</channel></rss>

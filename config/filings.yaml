@@ -1,0 +1,5 @@
+# SEC EDGAR. SEC asks for <= 10 requests/second and a User-Agent with contact info.
+forms: ["8-K", "10-Q", "10-K"]
+lookback_days_first_run: 30   # how far back to collect on an empty database
+lookback_days: 10             # overlap on later runs; duplicates are skipped by URL
+request_delay_seconds: 0.2
