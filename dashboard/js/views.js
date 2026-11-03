@@ -191,3 +191,68 @@ export async function system(el, setAsOf) {
       <section><p class="label">Summary</p><pre class="err text" style="color:var(--fg)">${esc(JSON.stringify(r.summary, null, 1))}</pre></section>`);
   }));
 }
+
+// ---------- Lesson book ----------
+export async function lessons(el, setAsOf) {
+  const teams = await q("teams", { select: "id,name,config", status: "eq.active", order: "id.asc" });
+  if (!teams.length) { el.innerHTML = `<p class="empty">No teams yet.</p>${DISCLAIMER}`; return; }
+  const ids = teams.map((t) => t.id);
+  const [rows, reviews] = await Promise.all([
+    q("lessons", { select: "id,team_id,text,score,times_used,times_helpful,active,post_mortem_id,created_at", order: "score.desc,id.desc", limit: 400 }),
+    q("post_mortems", { select: "id,closed_trade_id,team_id,created_at", team_id: inList(ids), order: "id.desc", limit: 12 }),
+  ]);
+  const trades = reviews.length ? await q("closed_trades", { select: "id,ticker,pnl_pct,benchmark_return,exit_date", id: inList(reviews.map((r) => r.closed_trade_id)) }) : [];
+  const tradeOf = Object.fromEntries(trades.map((t) => [t.id, t]));
+  const mine = rows.filter((l) => l.team_id == null || ids.includes(l.team_id));
+  if (reviews[0]) setAsOf(reviews[0].created_at);
+  const lessonRow = (l) => `
+    <li><button class="lesson-row" data-id="${l.id}">
+      <span class="lt text">${esc(l.text)}</span>
+      <span class="meta"><span class="score-bar"><i style="transform:scaleX(${l.score})"></i></span>
+        <span class="num">${num(l.score)}</span> · used ${l.times_used} · helped ${l.times_helpful}</span>
+    </button></li>`;
+  const section = (t) => {
+    const book = mine.filter((l) => l.team_id === t.id || (l.team_id == null && t.config?.shared_lessons));
+    const active = book.filter((l) => l.active), off = book.filter((l) => !l.active);
+    return `<section>
+      <p class="label">${esc(t.name)} · ${active.length} active</p>
+      ${active.length ? `<ul class="rows">${active.map(lessonRow).join("")}</ul>` : `<p class="note">No lessons yet. They appear after the first trades close.</p>`}
+      ${off.length ? `<details class="inactive"><summary class="note">${off.length} inactive</summary><ul class="rows">${off.map(lessonRow).join("")}</ul></details>` : ""}
+    </section>`;
+  };
+  el.innerHTML = `
+    <p class="note">Each closed trade gets a review and one lesson. A lesson's score rises when trades that used it beat SPY. Only the top ${10} go into a team's prompts.</p>
+    ${teams.map(section).join("")}
+    <section>
+      <p class="label">Recent reviews</p>
+      ${reviews.length ? `<ul class="rows">${reviews.map((r) => { const t = tradeOf[r.closed_trade_id] || {}; return `
+        <li><button class="dec-row pm-row" data-id="${r.id}">
+          <span class="tk num">${esc(t.ticker || "—")}</span>
+          <span class="mid"><span class="act ${tone(t.pnl_pct)}">${pct(t.pnl_pct)}</span>
+            <span class="meta">vs SPY ${pct(t.benchmark_return)} · closed ${day(t.exit_date)}</span></span>
+        </button></li>`; }).join("")}</ul>` : `<p class="note">No closed trades yet.</p>`}
+    </section>
+    ${DISCLAIMER}`;
+  el.querySelectorAll(".lesson-row").forEach((b) => b.addEventListener("click", () => {
+    const l = mine.find((x) => x.id === +b.dataset.id);
+    showReview(l.post_mortem_id, l);
+  }));
+  el.querySelectorAll(".pm-row").forEach((b) => b.addEventListener("click", () => showReview(+b.dataset.id)));
+}
+
+async function showReview(pmId, lesson) {
+  const [pm] = pmId ? await q("post_mortems", { select: "*", id: `eq.${pmId}` }) : [null];
+  const [t] = pm ? await q("closed_trades", { select: "*", id: `eq.${pm.closed_trade_id}` }) : [null];
+  const block = (title, body) => body ? `<section class="section"><p class="label">${title}</p><p class="text">${esc(body)}</p></section>` : "";
+  openSheet(`
+    <div class="sheet-title"><h2 class="display">${esc(t?.ticker || "Lesson")}</h2>
+      ${t ? `<span class="chip ${t.pnl_pct >= 0 ? "buy" : "sell"}">${pct(t.pnl_pct)}</span>` : ""}</div>
+    ${t ? `<p class="note" style="margin-top:-12px">${day(t.entry_date)} → ${day(t.exit_date)} · ${t.holding_days} days · SPY ${pct(t.benchmark_return)}</p>` : ""}
+    ${lesson ? `<div class="verdict"><div><span>Score</span><b>${num(lesson.score)}</b></div>
+      <div><span>Used</span><b>${lesson.times_used}</b></div><div><span>Helped</span><b>${lesson.times_helpful}</b></div></div>` : ""}
+    ${block("Lesson", lesson?.text || pm?.lesson_candidate)}
+    ${block("What happened", pm?.what_happened)}
+    ${block("Right or wrong", pm?.right_or_wrong)}
+    ${block("What was missed", pm?.what_was_missed)}
+    ${!pm ? `<p class="muted">No review found.</p>` : ""}`);
+}

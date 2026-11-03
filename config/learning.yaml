@@ -1,0 +1,7 @@
+# Lesson book (Phase 3).
+lessons_in_prompt: 10       # only the top-scoring lessons go into a team's prompts
+min_uses_to_judge: 4        # a lesson is only deactivated after it was used on this many closed trades
+deactivate_below: 0.35      # score threshold for deactivation (never deleted)
+max_active_per_team: 30     # beyond this, the lowest-scoring lessons are deactivated
+duplicate_similarity: 0.6   # word overlap above this = the same lesson (merged)
+max_post_mortems_per_run: 10

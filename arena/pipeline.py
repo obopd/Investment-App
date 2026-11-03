@@ -5,8 +5,8 @@
     python -m arena.pipeline --dry-run       # in-memory database, practice AI, nothing saved
 
 Steps (CLAUDE.md Section 6): budget check -> prices -> fill yesterday's orders at today's open
--> news and filings -> fact cards -> equity, benchmark, leaderboard -> team decisions -> log.
-Trust scoring (Phase 4) and post-mortems (Phase 3) slot in later.
+-> news and filings -> fact cards -> equity, benchmark, leaderboard -> post-mortems and lesson
+book -> team decisions -> log. Trust scoring (Phase 4) slots in after fact cards.
 Every step is safe to re-run: writes are upserts, skip-if-exists, or status changes.
 """
 import argparse
@@ -24,6 +24,7 @@ from arena.data.prices import TiingoProvider, collect_prices, history_start_from
 from arena.data.tagging import TickerTagger
 from arena.db.client import MemoryDB, SupabaseDB
 from arena.facts.extract import extract_fact_cards
+from arena.learning.postmortem import write_post_mortems
 from arena.http import make_session
 from arena.llm.budget import BudgetGuard
 from arena.llm.client import make_llm
@@ -163,7 +164,11 @@ def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
         return out
     step("equity", equity)
 
-    # 7. Team decisions -> orders for the next trading day's open. Only after the close: a
+    # 7. Post-mortems on closed trades -> lesson book (cheap model).
+    if llm.available:
+        step("post_mortems", lambda: write_post_mortems(db, llm, teams, config.load("learning"), now))
+
+    # 8. Team decisions -> orders for the next trading day's open. Only after the close: a
     # run started during the trading day would decide on stale data and use up the day.
     if now >= decision_cutoff(run_date) or force:
         step("decisions", lambda: {t["name"]: run_team(db, llm, t, run_date, stocks, bench, risk_cfg, run_row["id"])
