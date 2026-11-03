@@ -6,7 +6,7 @@ const view = document.getElementById("view");
 const asof = document.getElementById("asof");
 const refresh = document.getElementById("refresh");
 const tabs = [...document.querySelectorAll(".tab")];
-const RENDER = { board: views.leaderboard, decisions: views.decisions, lessons: views.lessons, system: views.system };
+const RENDER = { board: views.leaderboard, decisions: views.decisions, lessons: views.lessons, sources: views.sources, system: views.system };
 
 const setAsOf = (iso) => { asof.textContent = iso ? `as of ${day(iso)}` : ""; };
 

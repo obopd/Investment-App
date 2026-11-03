@@ -6,7 +6,7 @@
 
 Steps (CLAUDE.md Section 6): budget check -> prices -> fill yesterday's orders at today's open
 -> news and filings -> fact cards -> equity, benchmark, leaderboard -> post-mortems and lesson
-book -> team decisions -> log. Trust scoring (Phase 4) slots in after fact cards.
+book -> team decisions -> log. Source trust is updated right after fact cards.
 Every step is safe to re-run: writes are upserts, skip-if-exists, or status changes.
 """
 import argparse
@@ -25,6 +25,7 @@ from arena.data.tagging import TickerTagger
 from arena.db.client import MemoryDB, SupabaseDB
 from arena.facts.extract import extract_fact_cards
 from arena.learning.postmortem import write_post_mortems
+from arena.trust.scoring import corroborate, evaluate_claims
 from arena.http import make_session
 from arena.llm.budget import BudgetGuard
 from arena.llm.client import make_llm
@@ -155,6 +156,12 @@ def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
     if llm.available:
         step("fact_cards", lambda: extract_fact_cards(db, llm, set(stocks), config.load("facts"), now))
 
+    # 5b. Source trust: settle claims whose horizon has passed; label corroborated claims. No AI.
+    def trust():
+        cfg = config.load("trust")
+        return {"claims": evaluate_claims(db, run_date, cfg, bench, now), "corroboration": corroborate(db, cfg, now)}
+    step("trust", trust)
+
     # 6. Equity for every team, the SPY benchmark, and the leaderboard.
     def equity():
         closes = executor.latest_closes(db, stocks + [bench], run_date)
@@ -200,11 +207,13 @@ def main(argv=None) -> int:
     p.add_argument("--date", help="run as if it were this New York date (YYYY-MM-DD)")
     p.add_argument("--dry-run", action="store_true", help="in-memory DB and practice AI; saves nothing")
     p.add_argument("--force", action="store_true", help="run even if the market is closed")
+    p.add_argument("--skip-collect", action="store_true",
+                   help="don't fetch prices/news/filings (for quick checks; saves the Tiingo hourly limit)")
     args = p.parse_args(argv)
 
     run_date = date.fromisoformat(args.date) if args.date else datetime.now(NEW_YORK).date()
     db = MemoryDB() if args.dry_run else SupabaseDB.from_env()
-    result = run(run_date, db, dry_run=args.dry_run, force=args.force)
+    result = run(run_date, db, dry_run=args.dry_run, force=args.force, skip_collect=args.skip_collect)
     print(json.dumps({"date": run_date.isoformat(), **result}, indent=2, default=str))
     return 1 if result["status"] == "failed" else 0
 

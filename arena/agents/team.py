@@ -127,7 +127,7 @@ def cards_text(cards: list[dict], ticker: str | None = None) -> str:
     if not sel:
         return "No fact cards."
     return "\n".join(f"#{c['id']} [{c['ticker'] or 'MACRO'}] {c['direction']}, {c['type']}, {c['horizon_days']}d, "
-                     f"trust {c['trust']:.2f}, {c['sources']} source(s): {c['claim']}" for c in sel)
+                     f"trust {c['trust']:.2f}, {c['sources']} source(s){', CORROBORATED' if c['corroborated'] else ''}: {c['claim']}" for c in sel)
 
 
 # ---------- practice-mode stand-ins ----------

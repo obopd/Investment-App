@@ -1,0 +1,14 @@
+# Source trust scoring (Phase 4).
+# A claim is judged when its horizon has passed: the stock's return minus SPY's return from the
+# last close before publication to `horizon_days` trading days later.
+thresholds:          # excess return needed to call a claim correct/incorrect; in between = unclear
+  5: 0.01
+  20: 0.02
+# Official sources: a later claim from one of these that contradicts an earlier claim (same ticker,
+# same claim type, opposite direction) marks the earlier claim incorrect.
+official_domains: [sec.gov, apple.com, news.microsoft.com, nvidianews.nvidia.com, about.fb.com, blog.google]
+official_min_confidence: 0.6
+# Corroborated = repeated independently by at least this many sources at or above this trust.
+corroboration_min_sources: 2
+corroboration_min_trust: 0.5
+corroboration_window_days: 7
