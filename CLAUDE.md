@@ -8,6 +8,7 @@
 - Prefer simple, readable code. Comment the "why," not the "what."
 - If something is unclear or impossible, say so and propose an alternative instead of guessing.
 - Keep a PROGRESS.md file updated: done, next, known issues.
+- Whenever I need to paste something (SQL, secrets, values, settings), put it in the chat as ONE complete copy-ready code block. Never just point me to a file.
 
 ## 1. What the app is
 An experiment where several AI "teams" trade imaginary money using only free, public information. Each team is a group of AI agents that research, debate, and decide trades. Teams learn by:
