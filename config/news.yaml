@@ -1,0 +1,30 @@
+# Public RSS feeds. Each is checked against robots.txt before fetching; failures are logged and skipped.
+# tickers: feed is about these companies only (e.g. a company newsroom). Otherwise headlines are
+# tagged by matching ticker symbols and aliases from universe.yaml.
+# Not used (robots.txt disallows automated access): Yahoo Finance RSS, Google News, Seeking Alpha,
+# Motley Fool, Benzinga, Zacks.
+user_agent_env: SEC_USER_AGENT   # reuse the same contact string for polite crawling
+max_items_per_feed: 50
+snippet_chars: 500
+
+feeds:
+  # Market news
+  - {name: MarketWatch Top Stories, url: "https://feeds.content.dowjones.io/public/rss/mw_topstories"}
+  - {name: MarketWatch MarketPulse, url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"}
+  # blocked automated access (HTTP 403) in testing, 2026-11:
+  # - {name: CNBC Top News,           url: "https://www.cnbc.com/id/100003114/device/rss/rss.html"}
+  # blocked automated access (HTTP 403) in testing, 2026-11:
+  # - {name: CNBC Earnings,           url: "https://www.cnbc.com/id/15839135/device/rss/rss.html"}
+  # Press-release wires
+  - {name: PR Newswire All,         url: "https://www.prnewswire.com/rss/news-releases-list.rss"}
+  - {name: PR Newswire Financial,   url: "https://www.prnewswire.com/rss/financial-services-latest-news/financial-services-latest-news-list.rss"}
+  # blocked automated access (HTTP 403) in testing, 2026-11:
+  # - {name: GlobeNewswire Public Companies, url: "https://www.globenewswire.com/RssFeed/orgclass/1/feedTitle/GlobeNewswire%20-%20News%20about%20Public%20Companies"}
+  # Macro
+  - {name: Federal Reserve Press,   url: "https://www.federalreserve.gov/feeds/press_all.xml"}
+  # Company newsrooms
+  - {name: Apple Newsroom,          url: "https://www.apple.com/newsroom/rss-feed.rss",   tickers: [AAPL]}
+  - {name: Microsoft News,          url: "https://news.microsoft.com/feed/",              tickers: [MSFT]}
+  - {name: NVIDIA Newsroom,         url: "https://nvidianews.nvidia.com/releases.xml",    tickers: [NVDA]}
+  - {name: Meta Newsroom,           url: "https://about.fb.com/feed/",                    tickers: [META]}
+  - {name: Google Blog,             url: "https://blog.google/rss/",                      tickers: [GOOGL]}

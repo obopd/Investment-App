@@ -1,0 +1,57 @@
+name: Daily pipeline
+on:
+  schedule:
+    # 23:30 UTC = 6:30pm New York in winter, 7:30pm in summer: after the close and after
+    # Tiingo publishes end-of-day prices. Weekdays only; holidays are skipped in code.
+    # GitHub only runs schedules from the default branch (main).
+    - cron: "30 23 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "New York date YYYY-MM-DD (leave blank for today)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry run (nothing saved)"
+        type: boolean
+        default: false
+      force:
+        description: "Run even if the market was closed"
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: daily-pipeline   # never two runs at once; re-runs are safe but shouldn't overlap
+  cancel-in-progress: false
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Run pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
+          # Inputs are passed via env (not inlined) so they can't inject shell commands.
+          INPUT_DATE: ${{ inputs.date }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_FORCE: ${{ inputs.force }}
+        run: |
+          args=()
+          if [ -n "$INPUT_DATE" ]; then
+            [[ "$INPUT_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "Bad date: use YYYY-MM-DD"; exit 1; }
+            args+=(--date "$INPUT_DATE")
+          fi
+          [ "$INPUT_DRY_RUN" = "true" ] && args+=(--dry-run)
+          [ "$INPUT_FORCE" = "true" ] && args+=(--force)
+          python -m arena.pipeline "${args[@]}"

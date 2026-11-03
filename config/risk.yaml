@@ -1,0 +1,11 @@
+# Used from Phase 2. Enforced in code; risk rules can veto AI decisions.
+starting_cash: 100000
+fee_pct: 0.0005          # 0.05% per trade
+slippage_pct: 0.0005     # 0.05% worse than the open
+max_weight_per_stock: 0.15
+max_positions: 10
+min_cash_buffer: 0.05
+stop_loss_pct: -0.12
+max_new_positions_per_day: 2
+drawdown_brake_pct: 0.15      # from peak equity
+drawdown_release_pct: 0.10    # brake lifts once drawdown recovers to this

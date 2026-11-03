@@ -1,0 +1,3 @@
+provider: tiingo
+history_start: "2000-01-01"   # full history on first run (or as far back as the provider has)
+request_delay_seconds: 1.5    # Tiingo free tier is rate limited per hour; stay polite

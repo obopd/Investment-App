@@ -1,0 +1,45 @@
+# ~30 large, liquid US stocks across sectors, plus SPY as the benchmark.
+# aliases: company names used to tag general news headlines with tickers.
+# Keep aliases distinctive; ambiguous words (e.g. "Visa", "Meta") are matched case-sensitively.
+benchmark: SPY
+
+stocks:
+  # Technology
+  - {ticker: AAPL,  name: Apple,                 sector: Technology,             aliases: [Apple]}
+  - {ticker: MSFT,  name: Microsoft,             sector: Technology,             aliases: [Microsoft]}
+  - {ticker: NVDA,  name: NVIDIA,                sector: Technology,             aliases: [Nvidia, NVIDIA]}
+  - {ticker: AVGO,  name: Broadcom,              sector: Technology,             aliases: [Broadcom]}
+  - {ticker: ORCL,  name: Oracle,                sector: Technology,             aliases: [Oracle]}
+  - {ticker: AMD,   name: Advanced Micro Devices, sector: Technology,            aliases: [Advanced Micro Devices, AMD]}
+  # Communication services
+  - {ticker: GOOGL, name: Alphabet,              sector: Communication Services, aliases: [Alphabet, Google]}
+  - {ticker: META,  name: Meta Platforms,        sector: Communication Services, aliases: [Meta Platforms, Meta, Facebook, Instagram]}
+  - {ticker: NFLX,  name: Netflix,               sector: Communication Services, aliases: [Netflix]}
+  # Consumer discretionary
+  - {ticker: AMZN,  name: Amazon,                sector: Consumer Discretionary, aliases: [Amazon]}
+  - {ticker: TSLA,  name: Tesla,                 sector: Consumer Discretionary, aliases: [Tesla]}
+  - {ticker: HD,    name: Home Depot,            sector: Consumer Discretionary, aliases: [Home Depot]}
+  - {ticker: MCD,   name: McDonald's,            sector: Consumer Discretionary, aliases: [McDonald's, McDonalds]}
+  # Financials
+  - {ticker: JPM,   name: JPMorgan Chase,        sector: Financials,             aliases: [JPMorgan, JP Morgan]}
+  - {ticker: V,     name: Visa,                  sector: Financials,             aliases: [Visa Inc]}
+  - {ticker: MA,    name: Mastercard,            sector: Financials,             aliases: [Mastercard]}
+  - {ticker: BAC,   name: Bank of America,       sector: Financials,             aliases: [Bank of America, BofA]}
+  # Health care
+  - {ticker: LLY,   name: Eli Lilly,             sector: Health Care,            aliases: [Eli Lilly, Lilly]}
+  - {ticker: UNH,   name: UnitedHealth,          sector: Health Care,            aliases: [UnitedHealth]}
+  - {ticker: JNJ,   name: Johnson & Johnson,     sector: Health Care,            aliases: [Johnson & Johnson, J&J]}
+  - {ticker: MRK,   name: Merck,                 sector: Health Care,            aliases: [Merck]}
+  # Consumer staples
+  - {ticker: WMT,   name: Walmart,               sector: Consumer Staples,       aliases: [Walmart]}
+  - {ticker: PG,    name: Procter & Gamble,      sector: Consumer Staples,       aliases: [Procter & Gamble, P&G]}
+  - {ticker: KO,    name: Coca-Cola,             sector: Consumer Staples,       aliases: [Coca-Cola, Coca Cola]}
+  - {ticker: COST,  name: Costco,                sector: Consumer Staples,       aliases: [Costco]}
+  # Energy
+  - {ticker: XOM,   name: Exxon Mobil,           sector: Energy,                 aliases: [Exxon, ExxonMobil]}
+  - {ticker: CVX,   name: Chevron,               sector: Energy,                 aliases: [Chevron]}
+  # Industrials
+  - {ticker: CAT,   name: Caterpillar,           sector: Industrials,            aliases: [Caterpillar]}
+  - {ticker: GE,    name: GE Aerospace,          sector: Industrials,            aliases: [GE Aerospace]}
+  # Utilities
+  - {ticker: NEE,   name: NextEra Energy,        sector: Utilities,              aliases: [NextEra]}
