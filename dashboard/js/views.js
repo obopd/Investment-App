@@ -148,7 +148,7 @@ export async function system(el, setAsOf) {
   const ai = last.summary?.ai || {};
   const spent = ai.month_spent_usd ?? 0, cap = ai.monthly_cap_usd ?? 0;
   const s = last.summary || {};
-  const kv = (k, v) => `<div class="kv"><span>${k}</span><span class="num">${v}</span></div>`;
+  const kv = (k, v) => `<div class="kv"><span>${k}</span><span class="num">${typeof v === "number" ? v.toLocaleString("en-US") : v}</span></div>`;
   el.innerHTML = `
     <section class="card">
       <div class="status"><span class="dot ${esc(last.status)}"></span><b>Last run ${esc(last.status)}</b>
@@ -157,9 +157,11 @@ export async function system(el, setAsOf) {
     </section>
     <section>
       <p class="label">AI spend this month</p>
+      ${ai.mode ? `
       <span class="num" style="font-size:28px">$${spent.toFixed(2)}</span><span class="muted"> of $${cap.toFixed(2)} cap</span>
       <div class="meter"><i style="transform:scaleX(${cap ? Math.min(spent / cap, 1) : 0})"></i></div>
-      <p class="note" style="margin-top:8px">Mode: ${esc(ai.mode || "–")}${ai.mode === "practice" ? " (fake AI answers, $0)" : ""}${ai.available === false ? " · AI off (no key)" : ""}${ai.skipped_calls ? ` · ${ai.skipped_calls} call(s) skipped by the cap` : ""}</p>
+      <p class="note" style="margin-top:8px">Mode: ${esc(ai.mode)}${ai.mode === "practice" ? " (fake AI answers, $0)" : ""}${ai.available === false ? " · AI off (no key)" : ""}${ai.skipped_calls ? ` · ${ai.skipped_calls} call(s) skipped by the cap` : ""}</p>`
+      : `<p class="muted" style="margin:0">No AI used yet.</p>`}
     </section>
     <section>
       <p class="label">Last run</p>

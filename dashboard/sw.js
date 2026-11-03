@@ -1,5 +1,5 @@
 // Bump CACHE whenever a file in ASSETS changes, so installed copies update.
-const CACHE = "arena-v1";
+const CACHE = "arena-v2";
 const ASSETS = [
   "./", "index.html", "styles.css", "manifest.webmanifest", "config.js",
   "js/app.js", "js/api.js", "js/views.js", "js/chart.js", "js/format.js", "js/sheet.js",
