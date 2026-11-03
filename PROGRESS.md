@@ -23,7 +23,7 @@
 - Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
 - Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
 - Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
-- 103 tests passing, including a multi-day simulation.
+- 108 tests passing, including a multi-day simulation.
 - Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
 
 ## Done — Phase 3 (post-mortems and lesson book)
@@ -49,8 +49,15 @@
 - Dashboard: tap a team on the leaderboard for positions, recent trades, settings and lineage; retired teams are listed.
 - Practice stand-ins now follow each team's style, so practice teams differ.
 
-## Next — Phase 6
-Quant model with walk-forward evaluation report and monthly retraining.
+## Done — Phase 6 (quant model)
+- Features from daily prices only (`arena/quant/features.py`): momentum 5/20/60/120d, volatility 20/60d, volume change, 60d drawdown, distance from 20/50/200d averages, sector-relative and SPY-relative 20d return. Standardised across stocks each day.
+- Target: next 20 trading days' return minus SPY's. Model: ridge regression (numpy only).
+- Walk-forward evaluation from 2008: each month trains only on data whose outcome was known before that month (20-day purge gap), never shuffled. Compared with naive baselines (no skill, 60-day momentum). Honest verdict in `docs/quant_report.md`.
+- Monthly retraining workflow ("Quant model", 1st of the month) commits `models/quant_model.json` and the report.
+- The Analyst sees each stock's quant rank and predicted 20-day excess return as a minor hint; the model never trades by itself. No model file = no scores.
+
+## Next
+All six phases are built. Remaining: switch to live AI when ready (see docs/SETUP.md section 7), then let it run for months before judging results.
 
 ## Data sources and terms
 - **Tiingo** (prices): free plan is for personal/non-commercial use; raw data may not be redistributed. So `prices_daily` is not readable with the public dashboard key. Free limits are roughly 50 requests/hour and 1,000/day; a daily run uses ~31.

@@ -3,3 +3,4 @@ PyYAML>=6.0
 feedparser>=6.0
 anthropic>=0.70
 pydantic>=2.6
+numpy>=1.26

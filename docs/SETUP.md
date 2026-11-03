@@ -52,7 +52,15 @@ Repo → **Actions** → **Daily pipeline** → **Run workflow** → Run.
 6. On iPhone: open the link in Safari → Share → **Add to Home Screen**.
 
 ## 7. Later: real AI (costs money)
-1. console.anthropic.com → add credit (e.g. $5) and set a spend limit → create an API key.
+1. console.anthropic.com → add credit (e.g. $10) and set a spend limit → create an API key.
 2. GitHub secret `ANTHROPIC_API_KEY` = that key.
 3. In `config/models.yaml` change `mode: practice` to `mode: live`.
-   Practice teams are retired and a fresh team starts with fresh imaginary money.
+   Practice teams are retired and three fresh teams start with fresh imaginary money.
+4. Expected cost with three teams and the default "balanced" models: roughly $6-8 a month.
+   The default cap in `config/budget.yaml` is $5/month, so raise `monthly_cap_usd` (e.g. to 10)
+   or the AI steps will pause near the end of each month (data collection continues).
+
+## 8. Monthly jobs (automatic)
+- **Quant model** retrains on the 1st of each month and updates `docs/quant_report.md`.
+- **Evolution** runs on the first trading day of each month, only in live mode and only after
+  every team has ~3 months of trading and 10+ closed trades.

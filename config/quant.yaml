@@ -1,0 +1,10 @@
+# Quant model (Phase 6): predicts each stock's return in excess of SPY over the next 20 trading
+# days from price history only. It is one more input for the Analyst and never trades by itself.
+horizon_days: 20
+ridge_lambda: 10.0            # regularisation strength (features are standardised)
+walk_forward:
+  first_test_year: 2008       # earlier years only ever serve as training data
+  test_months: 1              # roll forward one month at a time
+  purge_days: 20              # gap between training targets and the test period (no overlap)
+model_path: models/quant_model.json
+report_path: docs/quant_report.md

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from arena.agents import prompts
 from arena.agents.inputs import build_inputs
+from arena.lookahead import LookAheadError
 from arena.llm.budget import BudgetExceeded
 from arena.risk.engine import evaluate, stop_loss_sells
 from arena.sim.executor import next_order_date
@@ -164,8 +165,21 @@ def mock_verdict(c: Candidate):
 
 
 # ---------- the daily process ----------
+def quant_text(quant: dict | None) -> str:
+    if not quant or not quant.get("scores"):
+        return "Not available."
+    ev = quant.get("evaluation") or {}
+    ic = (ev.get("ic_monthly") or {}).get("mean")
+    lines = [f"Predicted 20-day return vs SPY from price patterns only (rank 1 = most favourable). "
+             f"Historical skill is weak (walk-forward IC {ic:+.3f}); use as a minor hint." if ic is not None else
+             "Predicted 20-day return vs SPY from price patterns only (rank 1 = most favourable). Use as a minor hint."]
+    for t, s in sorted(quant["scores"].items(), key=lambda kv: kv[1]["rank"]):
+        lines.append(f"{s['rank']:>2}. {t} {s['pred'] * 100:+.2f}%")
+    return "\n".join(lines)
+
+
 def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: str,
-             risk_cfg: dict, run_id=None) -> dict:
+             risk_cfg: dict, run_id=None, quant: dict | None = None) -> dict:
     cfg = team["config"]
     tid = team["id"]
     summary = {"decisions": 0, "orders": 0, "skipped": None}
@@ -174,6 +188,8 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
         return summary
 
     inputs = build_inputs(db, cfg, tid, run_date, stocks + [benchmark])
+    if quant and quant["as_of"] > run_date.isoformat():
+        raise LookAheadError(f"quant scores from {quant['as_of']} used for a {run_date} decision")
     pf, prices = inputs["portfolio"], inputs["prices"]
     closes = {t: s["close"] for t, s in prices.items()}
     for_date = next_order_date(run_date)
@@ -215,7 +231,7 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
                                          news_weight=cfg.get("news_weight", 0.5))
     analyst_prompt = (f"Decision date: {run_date} (after the close).\nAllowed tickers: {', '.join(allowed)}\n\n"
                       f"PORTFOLIO\n{portfolio_text(pf, closes)}\n\nPRICES\n{prices_text(prices)}\n\n"
-                      f"FACT CARDS\n{cards_text(inputs['fact_cards'])}\n\nLESSONS\n"
+                      f"FACT CARDS\n{cards_text(inputs['fact_cards'])}\n\nQUANT MODEL\n{quant_text(quant)}\n\nLESSONS\n"
                       + ("\n".join(f"- {l['text']}" for l in inputs["lessons"]) or "None yet."))
     try:
         result = llm.json("analyst", analyst_sys, analyst_prompt, ANALYST_SCHEMA,
