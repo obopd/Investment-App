@@ -1,0 +1,14 @@
+# Monthly evolution (Phase 5). Runs on the first trading day of a month, at most once.
+enabled: true
+allow_in_practice: false      # practice results are placeholders; evolving on them means nothing
+min_trading_days: 63          # ~3 months of live paper trading for EVERY active team
+min_closed_trades: 10         # per team, so Sharpe isn't based on a handful of trades
+# Ranking: Sharpe of daily returns in excess of SPY (risk-adjusted, vs. the benchmark).
+mutate_count: [1, 2]          # how many settings to change in the child
+mutations:
+  news_weight:             {step: 0.2,  min: 0.0, max: 1.0}
+  min_source_trust:        {step: 0.05, min: 0.3, max: 0.8}
+  min_conviction:          {step: 0.05, min: 0.4, max: 0.9}
+  max_candidates_per_day:  {step: 1,    min: 1,   max: 5}
+  fact_card_lookback_days: {step: 2,    min: 3,   max: 14}
+  holding_style:           {choices: [short, long]}

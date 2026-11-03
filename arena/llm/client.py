@@ -34,17 +34,15 @@ class LLMClient:
     def available(self) -> bool:
         return self.practice or bool(self.providers)
 
-    def _model(self, role: str) -> dict:
-        return self.cfg["models"][self.cfg["roles"][role]]
-
-    def model_name(self, role: str) -> str:
-        return "practice-mock" if self.practice else self._model(role)["model"]
+    def _model(self, role: str, model_key: str | None = None) -> dict:
+        """model_key (a team's choice for this role) overrides the default in models.yaml."""
+        return self.cfg["models"][model_key or self.cfg["roles"][role]]
 
     def _cost(self, m: dict, tin: int, tout: int) -> float:
         return tin / 1e6 * m["input_per_mtok"] + tout / 1e6 * m["output_per_mtok"]
 
-    def _call(self, role, system, prompt, max_tokens, schema, mock):
-        m = self._model(role)
+    def _call(self, role, system, prompt, max_tokens, schema, mock, model_key=None):
+        m = self._model(role, model_key)
         if self.practice:
             provider = MockProvider()
             text, tin, tout, stop = provider.complete(model=m["model"], system=system, prompt=prompt,
@@ -72,13 +70,14 @@ class LLMClient:
         return text
 
     def json(self, role: str, system: str, prompt: str, schema: dict,
-             validate: Callable[[Any], Any], max_tokens: int = 2000, mock: Callable | None = None):
+             validate: Callable[[Any], Any], max_tokens: int = 2000, mock: Callable | None = None,
+             model_key: str | None = None):
         """Returns validate(parsed_json), or None after two invalid attempts (logged).
         BudgetExceeded propagates so the caller can stop making AI calls."""
         attempt_prompt = prompt
         for attempt in (1, 2):
             try:
-                text = self._call(role, system, attempt_prompt, max_tokens, schema, mock)
+                text = self._call(role, system, attempt_prompt, max_tokens, schema, mock, model_key)
                 return validate(_parse_json(text))
             except BudgetExceeded:
                 raise
@@ -94,9 +93,9 @@ class LLMClient:
         return None
 
     def text(self, role: str, system: str, prompt: str, max_tokens: int = 800,
-             mock: Callable | None = None) -> str | None:
+             mock: Callable | None = None, model_key: str | None = None) -> str | None:
         try:
-            out = self._call(role, system, prompt, max_tokens, None, mock).strip()
+            out = self._call(role, system, prompt, max_tokens, None, mock, model_key).strip()
             return out or None
         except BudgetExceeded:
             raise

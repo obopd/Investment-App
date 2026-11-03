@@ -23,7 +23,7 @@
 - Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
 - Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
 - Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
-- 94 tests passing, including a multi-day simulation.
+- 103 tests passing, including a multi-day simulation.
 - Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
 
 ## Done — Phase 3 (post-mortems and lesson book)
@@ -41,8 +41,16 @@
 - Dashboard: Source trust tab (shield icon), tap a source for its recent claims and outcomes.
 - `--skip-collect` flag / workflow option for quick checks that don't use the Tiingo hourly limit.
 
-## Next — Phase 5
-Three teams, monthly evolution with safeguards and lineage, team detail page.
+## Done — Phase 5 (three teams, evolution, team detail)
+- Three founding teams in `config/teams.yaml`: **Momentum** (short-term, price-trend leaning), **Newshound** (short-term, news-heavy, stricter source trust), **Steady** (long-term, fewer trades, higher conviction bar). Each can pick a model per role (default: cheap analyst/bull/bear, stronger judge).
+- Monthly evolution (`config/evolution.yaml`), first trading day of the month, at most once: ranks teams by the Sharpe ratio of daily returns in excess of SPY, retires the worst, and creates a child of the best with 1–2 mutated settings, fresh $100k and a copy of the parent's lesson book. Lineage (parent, generation, what changed) is stored.
+- Safeguards: live mode only, every team needs ≥63 trading days and ≥10 closed trades; mutations stay within bounds and are reproducible.
+- Founders retired by evolution are not recreated; editing `teams.yaml` only changes founders (generation 0).
+- Dashboard: tap a team on the leaderboard for positions, recent trades, settings and lineage; retired teams are listed.
+- Practice stand-ins now follow each team's style, so practice teams differ.
+
+## Next — Phase 6
+Quant model with walk-forward evaluation report and monthly retraining.
 
 ## Data sources and terms
 - **Tiingo** (prices): free plan is for personal/non-commercial use; raw data may not be redistributed. So `prices_daily` is not readable with the public dashboard key. Free limits are roughly 50 requests/hour and 1,000/day; a daily run uses ~31.
