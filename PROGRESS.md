@@ -10,7 +10,9 @@
 - `arena/pipeline.py` with `--date`, `--dry-run`, `--force`; skips weekends and NYSE holidays; safe to re-run; logs each run to `runs`.
 - No-look-ahead helpers (`arena/lookahead.py`) + tests.
 - GitHub Actions: tests on every push; daily run at 23:30 UTC on weekdays (plus manual "Run workflow").
-- 38 tests passing.
+- 39 tests passing.
+- First live run 2026-11-03: status ok. 195,626 price rows (31 tickers), 179 articles from 10 feeds, 60 SEC filings.
+- Supabase URL may be entered with or without `/rest/v1`.
 
 ## Next — Phase 2
 Fact cards, AI client with cost tracking and budget guard, first team, risk engine, simulator, benchmark, dashboard.
