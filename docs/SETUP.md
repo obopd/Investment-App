@@ -28,7 +28,7 @@ On GitHub: this repo → **Settings** → **Secrets and variables** → **Action
 | `SUPABASE_URL` | Project URL from step 1.4 |
 | `SUPABASE_SERVICE_KEY` | Secret key from step 1.4 |
 | `TIINGO_API_KEY` | Token from step 2 |
-| `SEC_USER_AGENT` | `AI-Trading-Arena marvinlim7501@gmail.com` |
+| `SEC_USER_AGENT` | `AI-Trading-Arena your-email@example.com` (your own email) |
 
 ## 4. Turn on Actions
 Repo → **Settings** → **Actions** → **General** → "Allow all actions" → Save.
