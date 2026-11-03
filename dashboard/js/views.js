@@ -221,6 +221,7 @@ export async function system(el, setAsOf) {
       ${kv("New filings", s.filings?.new_filings ?? "–")}
       ${kv("Fact cards", s.fact_cards ? `${s.fact_cards.cards_new} new · ${s.fact_cards.cards_merged} merged` : "–")}
       ${kv("AI calls", ai.calls ?? 0)}
+      ${s.quant ? kv("Quant model scores", s.quant.available ? `as of ${day(s.quant.as_of)}` : "no model yet") : ""}
     </section>
     <section>
       <p class="label">Recent runs</p>

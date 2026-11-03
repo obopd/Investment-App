@@ -26,6 +26,7 @@ from arena.db.client import MemoryDB, SupabaseDB
 from arena.facts.extract import extract_fact_cards
 from arena.learning.evolution import maybe_evolve
 from arena.learning.postmortem import write_post_mortems
+from arena.quant.score import quant_scores
 from arena.trust.scoring import corroborate, evaluate_claims
 from arena.http import make_session
 from arena.llm.budget import BudgetGuard
@@ -192,8 +193,15 @@ def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
     # 8. Team decisions -> orders for the next trading day's open. Only after the close: a
     # run started during the trading day would decide on stale data and use up the day.
     if now >= decision_cutoff(run_date) or force:
-        step("decisions", lambda: {t["name"]: run_team(db, llm, t, run_date, stocks, bench, risk_cfg, run_row["id"])
-                                   for t in teams})
+        quant = None
+        try:   # the quant model is optional: no model file yet = no scores
+            quant = quant_scores(db, run_date, stocks, [s["sector"] for s in universe["stocks"]], bench,
+                                 config.load("quant"))
+            summary["quant"] = {"available": bool(quant), "as_of": quant and quant["as_of"]}
+        except Exception as e:
+            errors["quant"] = f"{type(e).__name__}: {e}"[:300]
+        step("decisions", lambda: {t["name"]: run_team(db, llm, t, run_date, stocks, bench, risk_cfg,
+                                                       run_row["id"], quant) for t in teams})
     else:
         summary["decisions"] = {"skipped": "market still open; teams decide after 4pm New York"}
 
