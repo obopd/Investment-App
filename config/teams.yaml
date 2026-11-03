@@ -1,10 +1,11 @@
-# Phase 2 starts with one team; Phase 5 adds the other two.
+# Phase 2 runs one team; Phase 5 adds the other two.
 teams:
   - name: Momentum
     holding_style: short          # short | long
     news_weight: 0.3              # 0 = price trend only, 1 = news only
-    min_source_trust: 0.5
-    min_conviction: 0.6
+    min_source_trust: 0.4         # fact cards from sources below this are hidden from the team
+    min_conviction: 0.6           # judge verdicts below this become "hold"
     max_candidates_per_day: 3
-    models: {analyst: analyst, bull: bull, bear: bear, judge: judge}
+    fact_card_lookback_days: 7
+    max_fact_cards_in_prompt: 40
     shared_lessons: false

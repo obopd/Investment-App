@@ -10,10 +10,24 @@
 - `arena/pipeline.py` with `--date`, `--dry-run`, `--force`; skips weekends and NYSE holidays; safe to re-run; logs each run to `runs`.
 - No-look-ahead helpers (`arena/lookahead.py`) + tests.
 - GitHub Actions: tests on every push; daily run at 23:30 UTC on weekdays (plus manual "Run workflow").
-- 38 tests passing.
+- 39 tests passing.
+- First live run 2026-11-03: status ok. 195,626 price rows (31 tickers), 179 articles from 10 feeds, 60 SEC filings.
+- Supabase URL may be entered with or without `/rest/v1`.
 
-## Next — Phase 2
-Fact cards, AI client with cost tracking and budget guard, first team, risk engine, simulator, benchmark, dashboard.
+## Done — Phase 2 (one team + dashboard), built in practice mode
+- AI client (`arena/llm`): model per role from `config/models.yaml`, structured JSON output, validation with one retry, every call logged to `llm_usage`, budget guard checks the worst case before each call (monthly $5 / per run $0.50 by default).
+- Modes: `practice` (fake AI answers, $0, teams labelled "(practice)") and `live` (needs `ANTHROPIC_API_KEY`). Live without a key skips AI steps; data collection continues.
+- Fact cards (`arena/facts`): cheap model, 10 articles per call, each article processed once, near-duplicate claims merged with every source recorded. Practice cards are flagged and never shown to live teams; going live re-reads the last 3 days of articles with the real model.
+- Team "Momentum": Analyst → Bull → Bear → Judge, inputs built by code with the no-look-ahead check.
+- Risk engine (`arena/risk`): max weight 15%, max 10 positions, 5% cash buffer, max 2 new positions/day, stop-loss −12%, drawdown brake at −15% (releases at −10%). Can veto or resize.
+- Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
+- Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
+- Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
+- 72 tests passing, including a multi-day simulation.
+- Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
+
+## Next — Phase 3
+Post-mortems after every closed trade, lesson book with scoring, lesson book page.
 
 ## Data sources and terms
 - **Tiingo** (prices): free plan is for personal/non-commercial use; raw data may not be redistributed. So `prices_daily` is not readable with the public dashboard key. Free limits are roughly 50 requests/hour and 1,000/day; a daily run uses ~31.
@@ -27,4 +41,7 @@ Fact cards, AI client with cost tracking and budget guard, first team, risk engi
 - Ticker tagging of general headlines uses names/symbols and will have some misses and false hits; later AI fact-card extraction decides relevance.
 - Company newsroom feeds are mostly product/marketing posts (low signal); kept for now, trust scoring will judge them.
 - Unscheduled market closures (e.g. a national day of mourning) must be added to `SPECIAL_CLOSURES` in `arena/market_calendar.py`. If missed, the run simply finds no new price bar.
-- Dashboard hosting: GitHub Pages on a private repo needs a paid plan. Decide in Phase 2 (make repo public, or another free host).
+- Repo is public (for free GitHub Pages). Keys live only in GitHub Secrets; the dashboard key is read-only by design.
+- Practice-mode results are placeholders (a simple trend rule), not AI judgment.
+- Simulated teams receive no dividends (raw prices); the SPY benchmark is treated the same way for fairness.
+- Model prices in `config/models.yaml` were checked 2026-11; update them if Anthropic changes prices.

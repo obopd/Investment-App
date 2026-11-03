@@ -1,4 +1,6 @@
-from arena.db.client import SupabaseDB
+import pytest
+
+from arena.db.client import DBError, SupabaseDB
 from fakes import FakeResponse
 
 
@@ -44,3 +46,25 @@ def test_select_builds_filters():
         "prices_daily", {"ticker": "AAPL", "date": ("gte", "2026-01-01")}, columns="date", order="date.desc", limit=1)
     assert rec.calls[0][2]["params"] == {"select": "date", "ticker": "eq.AAPL", "date": "gte.2026-01-01",
                                          "order": "date.desc", "limit": "1"}
+
+
+def test_url_with_rest_path_is_accepted():
+    for url in ("https://x.supabase.co", "https://x.supabase.co/", "https://x.supabase.co/rest/v1/"):
+        assert SupabaseDB(url, "k", Recorder()).base == "https://x.supabase.co/rest/v1"
+
+
+def test_select_without_limit_pages_through_everything():
+    class Paged(Recorder):
+        def get(self, url, **kw):
+            off = int(kw["params"]["offset"])
+            n = 1000 if off < 2000 else 7
+            r = FakeResponse(200, "[" + ",".join('{"a":1}' for _ in range(n)) + "]", url)
+            r.request = type("Req", (), {"method": "GET"})()
+            self.calls.append(kw["params"]["offset"])
+            return r
+    rec = Paged()
+    db = SupabaseDB("https://x.supabase.co", "k", rec)
+    rows = db.select("llm_usage", {"id": ("in", [1, 2])}, order="id.asc")
+    assert len(rows) == 2007 and rec.calls == ["0", "1000", "2000"]
+    with pytest.raises(DBError):   # paging without a stable order is refused
+        db.select("llm_usage")

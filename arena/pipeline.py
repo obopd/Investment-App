@@ -2,11 +2,12 @@
 
     python -m arena.pipeline                 # today (New York date)
     python -m arena.pipeline --date 2026-11-02
-    python -m arena.pipeline --dry-run       # in-memory database, mocked AI, nothing saved
+    python -m arena.pipeline --dry-run       # in-memory database, practice AI, nothing saved
 
-Phase 1 steps: seed stocks -> prices -> news -> filings. Later phases add budget check, order
-fills, fact cards, trust, equity, post-mortems and team decisions (see CLAUDE.md Section 6).
-Every step is safe to re-run: writes are upserts or skip-if-exists.
+Steps (CLAUDE.md Section 6): budget check -> prices -> fill yesterday's orders at today's open
+-> news and filings -> fact cards -> equity, benchmark, leaderboard -> team decisions -> log.
+Trust scoring (Phase 4) and post-mortems (Phase 3) slot in later.
+Every step is safe to re-run: writes are upserts, skip-if-exists, or status changes.
 """
 import argparse
 import json
@@ -15,15 +16,20 @@ import traceback
 from datetime import date, datetime
 
 from arena import config
+from arena.agents.team import run_team
 from arena.data.common import utcnow
 from arena.data.filings import collect_filings, require_user_agent
 from arena.data.news import collect_news
 from arena.data.prices import TiingoProvider, collect_prices, history_start_from_config
 from arena.data.tagging import TickerTagger
 from arena.db.client import MemoryDB, SupabaseDB
+from arena.facts.extract import extract_fact_cards
 from arena.http import make_session
-from arena.lookahead import NEW_YORK
+from arena.llm.budget import BudgetGuard
+from arena.llm.client import make_llm
+from arena.lookahead import NEW_YORK, decision_cutoff
 from arena.market_calendar import is_trading_day
+from arena.sim import executor
 
 
 def seed_stocks(db) -> dict:
@@ -41,8 +47,37 @@ def seed_stocks(db) -> dict:
     return {"stocks": len(rows)}
 
 
+def seed_teams(db, run_date: date, mode: str, starting_cash: float) -> list[dict]:
+    """Create configured teams for the current mode; retire teams from the other mode.
+    Practice and live never mix: going live starts fresh teams with fresh imaginary money."""
+    wanted = config.load("teams")["teams"]
+    active = db.select("teams", {"status": "active"})
+    for t in active:
+        if (t.get("config") or {}).get("mode") != mode:
+            db.update("teams", {"id": t["id"]}, {"status": "retired", "retired_at": utcnow()})
+            db.update("orders", {"team_id": t["id"], "status": "pending"},
+                      {"status": "cancelled", "reason": "team retired"})
+    teams = []
+    for cfg in wanted:
+        name = cfg["name"] + (" (practice)" if mode == "practice" else "")
+        found = [t for t in db.select("teams", {"name": name, "status": "active"})]
+        if found:
+            team = found[0]
+            if team["config"] != {**cfg, "mode": mode}:   # config edits apply from the next run
+                db.update("teams", {"id": team["id"]}, {"config": {**cfg, "mode": mode}})
+                team["config"] = {**cfg, "mode": mode}
+        else:
+            team = db.insert("teams", [{"name": name, "generation": 0, "config": {**cfg, "mode": mode},
+                                        "status": "active"}], returning=True)[0]
+            db.insert("portfolios", [{"team_id": team["id"], "cash": starting_cash,
+                                      "peak_equity": starting_cash, "start_date": run_date}])
+        teams.append(team)
+    return teams
+
+
 def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
-        session=None, price_provider=None, now: datetime | None = None) -> dict:
+        session=None, price_provider=None, now: datetime | None = None,
+        skip_collect: bool = False) -> dict:
     """Run one day. Dependencies are injectable so tests can run fully offline."""
     now = now or utcnow()
     if not is_trading_day(run_date) and not force:
@@ -67,40 +102,90 @@ def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
             traceback.print_exc()
 
     universe = config.load("universe")
-    stock_tickers = [s["ticker"] for s in universe["stocks"]]
+    stocks = [s["ticker"] for s in universe["stocks"]]
+    bench = universe["benchmark"]
+    risk_cfg = config.load("risk")
+    models_cfg = config.load("models")
+    mode = "practice" if dry_run else models_cfg.get("mode", "practice")
 
     step("stocks", lambda: seed_stocks(db))
+    teams: list[dict] = []
 
-    def prices():
-        cfg = config.load("prices")
-        provider = price_provider or TiingoProvider.from_env(session, cfg.get("request_delay_seconds", 1.5))
-        return collect_prices(db, provider, config.universe_tickers(), run_date,
-                              history_start_from_config(cfg))
-    step("prices", prices)
+    def _teams():
+        teams.extend(seed_teams(db, run_date, mode, risk_cfg["starting_cash"]))
+        return {"active": [t["name"] for t in teams]}
+    step("teams", _teams)
 
-    def news():
-        cfg = config.load("news")
-        return collect_news(db, session, cfg["feeds"], TickerTagger(universe["stocks"]), now,
-                            cfg.get("max_items_per_feed", 50), cfg.get("snippet_chars", 500))
-    step("news", news)
+    # 1. Budget check. Over the cap means AI steps are skipped; everything else still runs.
+    guard = BudgetGuard.from_db(db, config.load("budget"), now)
+    llm = make_llm(db, run_row["id"], models_cfg, guard, dry_run)
+    if guard.exhausted:
+        print("WARNING: monthly AI budget reached; AI steps will be skipped.")
 
-    def filings():
-        cfg = config.load("filings")
-        session.headers["User-Agent"] = require_user_agent()  # SEC requires contact info
-        return collect_filings(db, session, stock_tickers, now, cfg["forms"], cfg["lookback_days"],
-                               cfg["lookback_days_first_run"], cfg.get("request_delay_seconds", 0.2))
-    step("filings", filings)
+    # 2. Prices first: today's open is needed to fill yesterday's orders.
+    if not skip_collect:
+        def prices():
+            cfg = config.load("prices")
+            provider = price_provider or TiingoProvider.from_env(session, cfg.get("request_delay_seconds", 1.5))
+            return collect_prices(db, provider, config.universe_tickers(), run_date,
+                                  history_start_from_config(cfg))
+        step("prices", prices)
 
-    collection_steps = ("prices", "news", "filings")
+    # 3. Fill pending orders at today's open.
+    step("orders_filled", lambda: {t["name"]: executor.execute_orders(db, t["id"], run_date, risk_cfg, bench)
+                                   for t in teams})
+
+    # 4. News and filings.
+    if not skip_collect:
+        def news():
+            cfg = config.load("news")
+            return collect_news(db, session, cfg["feeds"], TickerTagger(universe["stocks"]), now,
+                                cfg.get("max_items_per_feed", 50), cfg.get("snippet_chars", 500))
+        step("news", news)
+
+        def filings():
+            cfg = config.load("filings")
+            session.headers["User-Agent"] = require_user_agent()  # SEC requires contact info
+            return collect_filings(db, session, stocks, now, cfg["forms"], cfg["lookback_days"],
+                                   cfg["lookback_days_first_run"], cfg.get("request_delay_seconds", 0.2))
+        step("filings", filings)
+
+    # 5. Fact cards (cheap AI model).
+    if llm.available:
+        step("fact_cards", lambda: extract_fact_cards(db, llm, set(stocks), config.load("facts"), now))
+
+    # 6. Equity for every team, the SPY benchmark, and the leaderboard.
+    def equity():
+        closes = executor.latest_closes(db, stocks + [bench], run_date)
+        out = {t["name"]: executor.mark_equity(db, t["id"], run_date, closes, risk_cfg) for t in teams}
+        out["SPY"] = executor.mark_benchmark(db, run_date, bench, risk_cfg["starting_cash"])
+        executor.update_leaderboard(db, run_date)
+        return out
+    step("equity", equity)
+
+    # 7. Team decisions -> orders for the next trading day's open. Only after the close: a
+    # run started during the trading day would decide on stale data and use up the day.
+    if now >= decision_cutoff(run_date) or force:
+        step("decisions", lambda: {t["name"]: run_team(db, llm, t, run_date, stocks, bench, risk_cfg, run_row["id"])
+                                   for t in teams})
+    else:
+        summary["decisions"] = {"skipped": "market still open; teams decide after 4pm New York"}
+
+    summary["ai"] = {"mode": mode, "available": llm.available, "calls": llm.calls,
+                     "failures": llm.failures[:10], **guard.summary()}
+    if llm.failures:
+        errors["ai"] = f"{len(llm.failures)} AI call(s) failed validation or errored"
+
+    collection_steps = [s for s in ("prices", "news", "filings") if s in summary]
     hard_failures = [s for s in collection_steps if summary.get(s, {}).get("failed")]
-    if len(hard_failures) == len(collection_steps):
+    if collection_steps and len(hard_failures) == len(collection_steps):
         status = "failed"
     elif errors:
         status = "partial"
     else:
         status = "ok"
     db.update("runs", {"id": run_row["id"]}, {
-        "status": status, "finished_at": utcnow(), "summary": summary,
+        "status": status, "finished_at": utcnow(), "summary": json.loads(json.dumps(summary, default=str)),
         "error": json.dumps(errors)[:2000] if errors else None})
     return {"status": status, "summary": summary, "errors": errors}
 
@@ -108,7 +193,7 @@ def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="AI Trading Arena daily pipeline")
     p.add_argument("--date", help="run as if it were this New York date (YYYY-MM-DD)")
-    p.add_argument("--dry-run", action="store_true", help="in-memory DB and mocked AI; saves nothing")
+    p.add_argument("--dry-run", action="store_true", help="in-memory DB and practice AI; saves nothing")
     p.add_argument("--force", action="store_true", help="run even if the market is closed")
     args = p.parse_args(argv)
 

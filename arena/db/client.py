@@ -25,13 +25,26 @@ def _jsonable(v):
     return v
 
 
+def _as_instant(s: str):
+    if len(s) > 10 and s[4] == "-" and "T" in s:
+        try:
+            return datetime.fromisoformat(s.replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    return s
+
+
 def _clean(row: dict) -> dict:
     return {k: _jsonable(v) for k, v in row.items()}
 
 
 class SupabaseDB:
     def __init__(self, url: str, key: str, session: requests.Session | None = None):
-        self.base = url.rstrip("/") + "/rest/v1"
+        # Accept the project URL with or without the "/rest/v1" API path people often copy.
+        url = url.strip().rstrip("/")
+        if url.endswith("/rest/v1"):
+            url = url[: -len("/rest/v1")]
+        self.base = url + "/rest/v1"
         self.s = session or requests.Session()
         self.s.headers["apikey"] = key
         # Legacy service_role keys are JWTs and go in Authorization; new sb_secret_ keys don't.
@@ -56,23 +69,44 @@ class SupabaseDB:
 
     @staticmethod
     def _filters(filters: dict | None) -> dict:
+        """{"col": v} = equals; {"col": ("gte", v)}; ("in", [..]); ("is", None)."""
         params = {}
         for col, val in (filters or {}).items():
-            if isinstance(val, tuple):           # ("gte", value)
+            if isinstance(val, tuple):
                 op, v = val
-                params[col] = f"{op}.{_jsonable(v)}"
+                if op == "in":
+                    params[col] = "in.(" + ",".join(str(_jsonable(x)) for x in v) + ")"
+                elif op == "is":
+                    params[col] = "is.null" if v is None else f"is.{str(v).lower()}"
+                else:
+                    params[col] = f"{op}.{_jsonable(v)}"
             else:
                 params[col] = f"eq.{_jsonable(val)}"
         return params
 
+    PAGE = 1000  # Supabase returns at most 1000 rows per request by default
+
     def select(self, table, filters=None, columns="*", order=None, limit=None) -> list[dict]:
+        """Without a limit, pages through every matching row (so sums are never truncated)."""
         params = {"select": columns, **self._filters(filters)}
         if order:
             params["order"] = order              # e.g. "date.desc"
         if limit:
             params["limit"] = str(limit)
-        r = self._check(self.s.get(f"{self.base}/{table}", params=params, timeout=TIMEOUT))
-        return r.json()
+            r = self._check(self.s.get(f"{self.base}/{table}", params=params, timeout=TIMEOUT))
+            return r.json()
+        rows, offset = [], 0
+        while True:
+            page = dict(params, limit=str(self.PAGE), offset=str(offset))
+            r = self._check(self.s.get(f"{self.base}/{table}", params=page, timeout=TIMEOUT))
+            batch = r.json()
+            rows.extend(batch)
+            if len(batch) < self.PAGE:
+                return rows
+            if not order:
+                # Offset paging without a unique sort order can skip or repeat rows.
+                raise DBError(f"{table}: more than {self.PAGE} rows; pass an order to page safely")
+            offset += self.PAGE
 
     def _write(self, table, rows, prefer: list[str], params=None, returning=False) -> list[dict]:
         out = []
@@ -100,6 +134,13 @@ class SupabaseDB:
                                  timeout=TIMEOUT))
 
 
+    def delete(self, table, filters: dict) -> None:
+        if not filters:
+            raise DBError("refusing to delete without a filter")
+        self._check(self.s.delete(f"{self.base}/{table}", params=self._filters(filters),
+                                  headers={"Prefer": "return=minimal"}, timeout=TIMEOUT))
+
+
 class MemoryDB:
     """In-memory stand-in for SupabaseDB with the same methods."""
 
@@ -113,21 +154,38 @@ class MemoryDB:
     @staticmethod
     def _match(row, filters):
         for col, val in (filters or {}).items():
+            cur = _jsonable(row.get(col))
             if isinstance(val, tuple):
                 op, v = val
-                cur, v = _jsonable(row.get(col)), _jsonable(v)
-                ok = {"gte": cur >= v, "gt": cur > v, "lte": cur <= v, "lt": cur < v}[op]
+                if op == "in":
+                    if cur not in [_jsonable(x) for x in v]:
+                        return False
+                    continue
+                if op == "is":
+                    if cur is not v:
+                        return False
+                    continue
+                if cur is None:
+                    return False
+                v = _jsonable(v)
+                if op in ("gte", "gt", "lte", "lt") and isinstance(cur, str) and isinstance(v, str):
+                    # Compare timestamps as instants, not text ("...Z" vs "+00:00").
+                    cur, v = _as_instant(cur), _as_instant(v)
+                ok = {"gte": cur >= v, "gt": cur > v, "lte": cur <= v, "lt": cur < v, "neq": cur != v}[op]
                 if not ok:
                     return False
-            elif _jsonable(row.get(col)) != _jsonable(val):
+            elif cur != _jsonable(val):
                 return False
         return True
 
     def select(self, table, filters=None, columns="*", order=None, limit=None):
         rows = [dict(r) for r in self._t(table) if self._match(r, filters)]
         if order:
-            col, _, direction = order.partition(".")
-            rows.sort(key=lambda r: _jsonable(r.get(col)), reverse=direction == "desc")
+            # Apply "a.desc,b.asc" right-to-left so the first column wins (stable sort).
+            for part in reversed(order.split(",")):
+                col, _, direction = part.strip().partition(".")
+                rows.sort(key=lambda r: (r.get(col) is None, _jsonable(r.get(col))),
+                          reverse=direction == "desc")
         if limit:
             rows = rows[:limit]
         if columns != "*":
@@ -169,3 +227,8 @@ class MemoryDB:
         for r in self._t(table):
             if self._match(r, filters):
                 r.update(_clean(values))
+
+    def delete(self, table, filters):
+        if not filters:
+            raise DBError("refusing to delete without a filter")
+        self.tables[table] = [r for r in self._t(table) if not self._match(r, filters)]

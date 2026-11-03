@@ -28,7 +28,7 @@ On GitHub: this repo → **Settings** → **Secrets and variables** → **Action
 | `SUPABASE_URL` | Project URL from step 1.4 |
 | `SUPABASE_SERVICE_KEY` | Secret key from step 1.4 |
 | `TIINGO_API_KEY` | Token from step 2 |
-| `SEC_USER_AGENT` | `AI-Trading-Arena marvinlim7501@gmail.com` |
+| `SEC_USER_AGENT` | `AI-Trading-Arena your-email@example.com` (your own email) |
 
 ## 4. Turn on Actions
 Repo → **Settings** → **Actions** → **General** → "Allow all actions" → Save.
@@ -38,3 +38,21 @@ Repo → **Actions** → **Daily pipeline** → **Run workflow** → Run.
 - The first run downloads ~25 years of prices for 31 tickers (a few minutes).
 - Green check = done. In Supabase → **Table Editor**, `prices_daily`, `articles` and `runs` should have rows.
 - After that it runs by itself every weekday evening (US time).
+
+## 6. Phase 2: database update and dashboard
+1. Supabase → **SQL Editor** → **New query** → paste the Phase 2 block (Claude gives it in chat;
+   it is also `arena/db/migrations/002_phase2.sql`) → **Run**.
+2. Supabase → **Project Settings** → **API Keys** → copy the **Publishable key** (`sb_publishable_...`,
+   or legacy **anon**). It is read-only and safe to be public.
+3. GitHub → **Settings** → **Secrets and variables** → **Actions** → new secret
+   `SUPABASE_PUBLISHABLE_KEY` = that key.
+4. GitHub → **Settings** → **Pages** → **Source: GitHub Actions**.
+5. GitHub → **Actions** → **Dashboard** → **Run workflow**. The link appears on the run page
+   (`https://obopd.github.io/Investment-App/`).
+6. On iPhone: open the link in Safari → Share → **Add to Home Screen**.
+
+## 7. Later: real AI (costs money)
+1. console.anthropic.com → add credit (e.g. $5) and set a spend limit → create an API key.
+2. GitHub secret `ANTHROPIC_API_KEY` = that key.
+3. In `config/models.yaml` change `mode: practice` to `mode: live`.
+   Practice teams are retired and a fresh team starts with fresh imaginary money.
