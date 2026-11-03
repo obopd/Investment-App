@@ -5,6 +5,7 @@ trades, and compete against a buy-and-hold SPY benchmark.
 
 > Experimental simulation with imaginary money. Not investment advice.
 
+- Dashboard: https://obopd.github.io/Investment-App/ (add to iPhone Home Screen from Safari)
 - Spec: [CLAUDE.md](CLAUDE.md)
 - Status: [PROGRESS.md](PROGRESS.md)
 - Setup: [docs/SETUP.md](docs/SETUP.md)

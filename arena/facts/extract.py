@@ -29,7 +29,7 @@ SCHEMA = {
         "type": "object",
         "properties": {
             "article_id": {"type": "integer"},
-            "ticker": {"type": ["string", "null"]},
+            "ticker": {"anyOf": [{"type": "string"}, {"type": "null"}]},
             "claim": {"type": "string"},
             "direction": {"type": "string", "enum": list(DIRECTIONS)},
             "claim_type": {"type": "string", "enum": list(CLAIM_TYPES)},
@@ -151,8 +151,11 @@ def _prompt(batch: list[dict], source_names: dict[int, str]) -> str:
 def extract_fact_cards(db, llm, universe: set[str], cfg: dict, now) -> dict:
     summary = {"articles_processed": 0, "cards_new": 0, "cards_merged": 0, "skipped_budget": False}
     since = now - timedelta(days=cfg.get("max_age_days", 3))
-    pending = db.select("articles", {"facts_extracted_at": ("is", None), "published_at": ("gte", since)},
-                        order="published_at.asc")
+    # Practice and live keep separate "done" markers, so going live re-reads recent articles
+    # with the real model instead of inheriting placeholder cards.
+    marker = "practice_extracted_at" if llm.practice else "facts_extracted_at"
+    pending = db.select("articles", {marker: ("is", None), "published_at": ("gte", since)},
+                        order="published_at.asc,id.asc")
     # Only articles that can produce a usable claim: tagged companies, filings, or the Fed.
     pending = [a for a in pending if a.get("tickers") or a.get("kind") == "filing"
                or "federalreserve" in (a.get("url") or "")][: cfg.get("max_articles_per_run", 150)]
@@ -161,8 +164,8 @@ def extract_fact_cards(db, llm, universe: set[str], cfg: dict, now) -> dict:
 
     sources = {s["id"]: s["name"] for s in db.select("sources", columns="id,name")}
     window = now - timedelta(days=cfg.get("dedupe_window_days", 7))
-    existing = db.select("fact_cards", {"created_at": ("gte", window)},
-                         columns="id,ticker,claim,direction")
+    existing = db.select("fact_cards", {"created_at": ("gte", window), "practice": llm.practice},
+                         columns="id,ticker,claim,direction", order="id.asc")
     threshold = cfg.get("dedupe_similarity", 0.8)
     by_id = {a["id"]: a for a in pending}
     size = cfg.get("batch_size", 10)
@@ -172,7 +175,7 @@ def extract_fact_cards(db, llm, universe: set[str], cfg: dict, now) -> dict:
         ids = {a["id"] for a in batch}
         try:
             cards = llm.json("fact_cards", SYSTEM, _prompt(batch, sources), SCHEMA,
-                             make_validator(ids, universe), max_tokens=3000,
+                             make_validator(ids, universe), max_tokens=4000,
                              mock=lambda b=batch: mock_cards(b))
         except BudgetExceeded:
             summary["skipped_budget"] = True
@@ -188,7 +191,8 @@ def extract_fact_cards(db, llm, universe: set[str], cfg: dict, now) -> dict:
                     "article_id": c.article_id, "ticker": c.ticker, "claim": c.claim,
                     "direction": c.direction, "claim_type": c.claim_type,
                     "horizon_days": c.horizon_days, "confidence": c.confidence,
-                    "published_at": art["published_at"], "created_at": now}], returning=True)[0]
+                    "published_at": art["published_at"], "practice": llm.practice,
+                    "created_at": now}], returning=True)[0]
                 card_id = row["id"]
                 existing.append({"id": card_id, "ticker": c.ticker, "claim": c.claim, "direction": c.direction})
                 summary["cards_new"] += 1
@@ -196,6 +200,6 @@ def extract_fact_cards(db, llm, universe: set[str], cfg: dict, now) -> dict:
                                              "source_id": art["source_id"]}],
                       on_conflict="fact_card_id,article_id", ignore_duplicates=True)
         # Mark processed even when no cards came out (or output was invalid twice): never pay twice.
-        db.update("articles", {"id": ("in", sorted(ids))}, {"facts_extracted_at": now})
+        db.update("articles", {"id": ("in", sorted(ids))}, {marker: now})
         summary["articles_processed"] += len(batch)
     return summary

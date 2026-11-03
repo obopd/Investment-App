@@ -18,7 +18,7 @@ class BudgetGuard:
 
     @classmethod
     def from_db(cls, db, cfg: dict, now: datetime) -> "BudgetGuard":
-        rows = db.select("llm_usage", {"created_at": ("gte", month_start(now))}, columns="cost_usd")
+        rows = db.select("llm_usage", {"created_at": ("gte", month_start(now))}, columns="cost_usd", order="id.asc")
         spent = sum(float(r["cost_usd"] or 0) for r in rows)
         return cls(float(cfg["monthly_cap_usd"]), float(cfg["per_run_cap_usd"]), spent)
 

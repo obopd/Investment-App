@@ -16,7 +16,7 @@ def _d(v) -> date:
 # ---------- prices ----------
 def load_bars(db, tickers: list[str], start: date, end: date) -> dict[str, list[dict]]:
     rows = db.select("prices_daily", {"date": ("gte", start), "ticker": ("in", tickers)},
-                     columns="ticker,date,open,close,volume", order="date.asc")
+                     columns="ticker,date,open,close,volume", order="date.asc,ticker.asc")
     out = defaultdict(list)
     for r in rows:
         if _d(r["date"]) <= end:
@@ -142,7 +142,7 @@ def update_leaderboard(db, run_date: date) -> int:
         series = [r["total_equity"] for r in eq]
         start = _d(eq[0]["date"])
         starts.append(start)
-        trades = db.select("trades", {"team_id": t["id"]}, columns="id")
+        trades = db.select("trades", {"team_id": t["id"]}, columns="id", order="id.asc")
         db.upsert("leaderboard", [{
             "key": f"team:{t['id']}", "team_id": t["id"], "name": t["name"], "is_benchmark": False,
             "start_date": start, "as_of": run_date, "equity": series[-1],

@@ -37,7 +37,7 @@ def card_trust(db, card_ids: list[int]) -> dict[int, dict]:
     if not card_ids:
         return {}
     links = db.select("fact_card_sources", {"fact_card_id": ("in", card_ids)},
-                      columns="fact_card_id,source_id")
+                      columns="fact_card_id,source_id", order="fact_card_id.asc,article_id.asc")
     sources = {s["id"]: s for s in db.select("sources", columns="id,name,trust_score")}
     out: dict[int, dict] = {}
     for link in links:
@@ -61,7 +61,10 @@ def build_inputs(db, team_cfg: dict, team_id: int, run_date: date, tickers: list
             prices[t] = s
 
     since = cutoff - timedelta(days=team_cfg.get("fact_card_lookback_days", 7))
-    cards = db.select("fact_cards", {"published_at": ("gte", since)}, order="published_at.desc")
+    filters = {"published_at": ("gte", since)}
+    if team_cfg.get("mode") == "live":
+        filters["practice"] = False   # placeholder cards from practice mode never reach real teams
+    cards = db.select("fact_cards", filters, order="published_at.desc,id.desc")
     cards = visible_items(cards, cutoff)
     info = card_trust(db, [c["id"] for c in cards])
     min_trust = team_cfg.get("min_source_trust", 0.0)

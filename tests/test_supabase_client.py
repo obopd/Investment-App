@@ -1,4 +1,6 @@
-from arena.db.client import SupabaseDB
+import pytest
+
+from arena.db.client import DBError, SupabaseDB
 from fakes import FakeResponse
 
 
@@ -61,5 +63,8 @@ def test_select_without_limit_pages_through_everything():
             self.calls.append(kw["params"]["offset"])
             return r
     rec = Paged()
-    rows = SupabaseDB("https://x.supabase.co", "k", rec).select("llm_usage", {"id": ("in", [1, 2])})
+    db = SupabaseDB("https://x.supabase.co", "k", rec)
+    rows = db.select("llm_usage", {"id": ("in", [1, 2])}, order="id.asc")
     assert len(rows) == 2007 and rec.calls == ["0", "1000", "2000"]
+    with pytest.raises(DBError):   # paging without a stable order is refused
+        db.select("llm_usage")

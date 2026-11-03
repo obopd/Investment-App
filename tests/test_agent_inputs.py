@@ -57,3 +57,10 @@ def test_low_trust_sources_are_hidden():
     db = make_db()
     db.update("sources", {"id": 1}, {"trust_score": 0.2})
     assert build_inputs(db, {"min_source_trust": 0.4}, 1, D, ["AAPL"])["fact_cards"] == []
+
+
+def test_live_teams_never_see_practice_cards():
+    db = make_db()
+    db.update("fact_cards", {"id": 1}, {"practice": True})
+    assert build_inputs(db, {"min_source_trust": 0, "mode": "live"}, 1, D, ["AAPL"])["fact_cards"] == []
+    assert len(build_inputs(db, {"min_source_trust": 0, "mode": "practice"}, 1, D, ["AAPL"])["fact_cards"]) == 1

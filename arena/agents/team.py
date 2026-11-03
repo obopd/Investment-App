@@ -211,7 +211,7 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
                       + ("\n".join(f"- {l['text']}" for l in inputs["lessons"]) or "None yet."))
     try:
         result = llm.json("analyst", analyst_sys, analyst_prompt, ANALYST_SCHEMA,
-                          validate_analyst(k, set(allowed), card_ids), max_tokens=3000,
+                          validate_analyst(k, set(allowed), card_ids), max_tokens=6000,
                           mock=lambda: mock_analyst(inputs, k, allowed))
         if result is None:
             record(None, "skipped: invalid analyst output", analyst_report="The analyst's reply failed validation twice.")
@@ -228,13 +228,13 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
             case = (f"Decision date: {run_date}. Proposed action: {c.action.upper()} {c.ticker}.\n"
                     f"Analyst report: {c.report}\n\nPRICES\n{prices_text(prices, [c.ticker, 'SPY'])}\n\n"
                     f"EVIDENCE\n{evidence}\n\nPORTFOLIO\n{portfolio_text(pf, closes)}")
-            bull = llm.text("bull", prompts.BULL, case, max_tokens=1200,
+            bull = llm.text("bull", prompts.BULL, case, max_tokens=2000,
                             mock=lambda c=c: f"[practice] Case for {c.action} {c.ticker}: trend and cited cards.")
-            bear = llm.text("bear", prompts.BEAR, case, max_tokens=1200,
+            bear = llm.text("bear", prompts.BEAR, case, max_tokens=2000,
                             mock=lambda c=c: f"[practice] Case against {c.action} {c.ticker}: evidence is thin.")
             judge_prompt = case + f"\n\nBULL\n{bull or '(missing)'}\n\nBEAR\n{bear or '(missing)'}\n\nReturn the verdict for {c.ticker}."
             verdict = llm.json("judge", prompts.JUDGE, judge_prompt, JUDGE_SCHEMA, validate_judge(c.ticker),
-                               max_tokens=2500, mock=lambda c=c: mock_verdict(c))
+                               max_tokens=6000, mock=lambda c=c: mock_verdict(c))
             if verdict is None:
                 record(c.ticker, "skipped: invalid judge output", c.report, bull, bear)
                 continue

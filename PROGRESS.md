@@ -17,13 +17,13 @@
 ## Done — Phase 2 (one team + dashboard), built in practice mode
 - AI client (`arena/llm`): model per role from `config/models.yaml`, structured JSON output, validation with one retry, every call logged to `llm_usage`, budget guard checks the worst case before each call (monthly $5 / per run $0.50 by default).
 - Modes: `practice` (fake AI answers, $0, teams labelled "(practice)") and `live` (needs `ANTHROPIC_API_KEY`). Live without a key skips AI steps; data collection continues.
-- Fact cards (`arena/facts`): cheap model, 10 articles per call, each article processed once, near-duplicate claims merged with every source recorded.
+- Fact cards (`arena/facts`): cheap model, 10 articles per call, each article processed once, near-duplicate claims merged with every source recorded. Practice cards are flagged and never shown to live teams; going live re-reads the last 3 days of articles with the real model.
 - Team "Momentum": Analyst → Bull → Bear → Judge, inputs built by code with the no-look-ahead check.
 - Risk engine (`arena/risk`): max weight 15%, max 10 positions, 5% cash buffer, max 2 new positions/day, stop-loss −12%, drawdown brake at −15% (releases at −10%). Can veto or resize.
 - Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
 - Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
 - Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
-- 70 tests passing, including a multi-day simulation.
+- 72 tests passing, including a multi-day simulation.
 - Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
 
 ## Next — Phase 3

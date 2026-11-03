@@ -240,6 +240,9 @@ alter table articles   add column if not exists facts_extracted_at timestamptz;
 alter table fact_cards add column if not exists published_at timestamptz;
 alter table portfolios add column if not exists brake_active boolean not null default false;
 alter table portfolios add column if not exists start_date date;
+-- Practice mode (fake AI) is kept apart from live mode so placeholder facts never reach real teams.
+alter table articles   add column if not exists practice_extracted_at timestamptz;
+alter table fact_cards add column if not exists practice boolean not null default false;
 create index if not exists fact_cards_published_at_idx on fact_cards (published_at);
 create index if not exists articles_unprocessed_idx on articles (published_at) where facts_extracted_at is null;
 

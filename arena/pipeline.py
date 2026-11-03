@@ -55,6 +55,8 @@ def seed_teams(db, run_date: date, mode: str, starting_cash: float) -> list[dict
     for t in active:
         if (t.get("config") or {}).get("mode") != mode:
             db.update("teams", {"id": t["id"]}, {"status": "retired", "retired_at": utcnow()})
+            db.update("orders", {"team_id": t["id"], "status": "pending"},
+                      {"status": "cancelled", "reason": "team retired"})
     teams = []
     for cfg in wanted:
         name = cfg["name"] + (" (practice)" if mode == "practice" else "")

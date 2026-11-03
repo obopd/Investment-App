@@ -43,8 +43,25 @@ def test_articles_are_never_processed_twice_and_old_or_untagged_are_ignored():
     calls = llm.calls
     assert extract_fact_cards(db, llm, UNIVERSE, CFG, NOW)["articles_processed"] == 0
     assert llm.calls == calls
-    processed = {a["id"] for a in db.select("articles") if a.get("facts_extracted_at")}
+    processed = {a["id"] for a in db.select("articles") if a.get("practice_extracted_at")}
     assert processed == {10, 11}
+
+
+def test_practice_cards_stay_separate_from_live():
+    db = setup_db()
+    extract_fact_cards(db, practice_llm(db), UNIVERSE, CFG, NOW)
+    assert all(c["practice"] for c in db.select("fact_cards"))
+
+    class LiveProvider:
+        name = "anthropic"
+        def complete(self, **kw):
+            return ('{"cards": [{"article_id": 10, "ticker": "AAPL", "claim": "Apple raised its guidance", '
+                    '"direction": "positive", "claim_type": "guidance", "horizon_days": 20, "confidence": 0.8}]}', 100, 50, "end_turn")
+    live = LLMClient(db, 2, config.load("models"), BudgetGuard(5, 1), {"anthropic": LiveProvider()})
+    s = extract_fact_cards(db, live, UNIVERSE, CFG, NOW)
+    assert s["articles_processed"] == 2 and s["cards_new"] == 1      # re-read by the real model, not merged into practice
+    real = [c for c in db.select("fact_cards") if not c["practice"]]
+    assert [c["claim"] for c in real] == ["Apple raised its guidance"]
 
 
 def test_validator_drops_outside_tickers_and_rejects_unknown_articles():

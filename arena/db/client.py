@@ -103,6 +103,9 @@ class SupabaseDB:
             rows.extend(batch)
             if len(batch) < self.PAGE:
                 return rows
+            if not order:
+                # Offset paging without a unique sort order can skip or repeat rows.
+                raise DBError(f"{table}: more than {self.PAGE} rows; pass an order to page safely")
             offset += self.PAGE
 
     def _write(self, table, rows, prefer: list[str], params=None, returning=False) -> list[dict]:

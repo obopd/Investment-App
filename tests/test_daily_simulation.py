@@ -103,6 +103,8 @@ def test_going_live_retires_practice_team(world, monkeypatch):
     result = pipeline.run(DAYS[1], db, dry_run=False, session=FakeSession({}), price_provider=prices, now=now)
     teams = {t["name"]: t["status"] for t in db.select("teams")}
     assert teams == {"Momentum (practice)": "retired", "Momentum": "active"}
+    practice_id = next(t["id"] for t in db.select("teams") if t["status"] == "retired")
+    assert all(o["status"] != "pending" for o in db.select("orders", {"team_id": practice_id}))
     assert result["summary"]["ai"]["available"] is False       # no key: AI skipped, data still collected
     assert any(d["final_action"].startswith("no AI") for d in db.select("decisions"))
     assert next_trading_day(DAYS[0]) == DAYS[1]
