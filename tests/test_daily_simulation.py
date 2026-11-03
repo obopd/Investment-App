@@ -106,3 +106,13 @@ def test_going_live_retires_practice_team(world, monkeypatch):
     assert result["summary"]["ai"]["available"] is False       # no key: AI skipped, data still collected
     assert any(d["final_action"].startswith("no AI") for d in db.select("decisions"))
     assert next_trading_day(DAYS[0]) == DAYS[1]
+
+
+def test_no_decisions_before_the_close(world):
+    db, prices = world
+    midday = datetime.combine(DAYS[0], time(17, 0), timezone.utc)   # 12pm New York
+    r = pipeline.run(DAYS[0], db, dry_run=True, session=FakeSession({}), price_provider=prices, now=midday)
+    assert "market still open" in r["summary"]["decisions"]["skipped"]
+    assert db.select("decisions") == []
+    run_day(db, prices, DAYS[0])                                     # the evening run still decides
+    assert db.select("decisions")

@@ -27,7 +27,7 @@ from arena.facts.extract import extract_fact_cards
 from arena.http import make_session
 from arena.llm.budget import BudgetGuard
 from arena.llm.client import make_llm
-from arena.lookahead import NEW_YORK
+from arena.lookahead import NEW_YORK, decision_cutoff
 from arena.market_calendar import is_trading_day
 from arena.sim import executor
 
@@ -161,9 +161,13 @@ def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
         return out
     step("equity", equity)
 
-    # 7. Team decisions -> orders for the next trading day's open.
-    step("decisions", lambda: {t["name"]: run_team(db, llm, t, run_date, stocks, bench, risk_cfg, run_row["id"])
-                               for t in teams})
+    # 7. Team decisions -> orders for the next trading day's open. Only after the close: a
+    # run started during the trading day would decide on stale data and use up the day.
+    if now >= decision_cutoff(run_date) or force:
+        step("decisions", lambda: {t["name"]: run_team(db, llm, t, run_date, stocks, bench, risk_cfg, run_row["id"])
+                                   for t in teams})
+    else:
+        summary["decisions"] = {"skipped": "market still open; teams decide after 4pm New York"}
 
     summary["ai"] = {"mode": mode, "available": llm.available, "calls": llm.calls,
                      "failures": llm.failures[:10], **guard.summary()}

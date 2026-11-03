@@ -23,7 +23,8 @@
 - Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
 - Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
 - Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
-- 69 tests passing, including a multi-day simulation.
+- 70 tests passing, including a multi-day simulation.
+- Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
 
 ## Next — Phase 3
 Post-mortems after every closed trade, lesson book with scoring, lesson book page.
