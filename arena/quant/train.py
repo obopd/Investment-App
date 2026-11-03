@@ -54,7 +54,7 @@ def report(ev: dict, model: dict, cfg: dict) -> str:
         "| Measure | Model | Naive baseline |", "|---|---|---|",
         f"| Rank correlation with outcome (IC), monthly average | {_f(ic)} | 0 (no skill) |",
         f"| IC t-statistic (monthly) | {_f(t, digits=2)} | – |",
-        f"| IC vs. 60-day momentum ranking | {_f(ev['ic_daily_mean'])} | {_f(base)} |",
+        f"| Daily IC: model vs. simple 60-day momentum ranking | {_f(ev['ic_daily_mean'])} | {_f(base)} |",
         f"| Months with positive IC | {pos_months} | 50% |",
         f"| Top fifth minus bottom fifth, 20-day excess return | {_f(ev['top_minus_bottom_monthly']['mean'], pct=True)} | 0% |", "",
         "IC is the rank correlation between predicted and actual excess returns across the ~30 stocks; 0.02-0.05 is typical for useful "
