@@ -1,4 +1,4 @@
-import { q, inList } from "./api.js";
+import { q, qAll, inList } from "./api.js";
 import { lineChart } from "./chart.js";
 import { ago, day, dayYear, esc, money, num, pct, tone } from "./format.js";
 import { openSheet } from "./sheet.js";
@@ -9,20 +9,22 @@ const DISCLAIMER = `<p class="note disclaimer">Experimental simulation with imag
 export async function leaderboard(el, setAsOf) {
   const [rows, teams] = await Promise.all([
     q("leaderboard", { select: "*" }),
-    q("teams", { select: "id,name,config", status: "eq.active" }),
+    q("teams", { select: "id,name,config,status,generation,parent_team_id,mutation,created_at,retired_at", order: "id.asc" }),
   ]);
-  const teamRows = rows.filter((r) => !r.is_benchmark && teams.some((t) => t.id === r.team_id))
+  allTeams = teams;
+  const active = teams.filter((t) => t.status === "active");
+  const teamRows = rows.filter((r) => !r.is_benchmark && active.some((t) => t.id === r.team_id))
     .sort((a, b) => (b.total_return ?? -1) - (a.total_return ?? -1));
   const spy = rows.find((r) => r.is_benchmark);
   if (!teamRows.length) {
-    el.innerHTML = `<p class="empty">No results yet. The first daily run creates the team.</p>${DISCLAIMER}`;
+    el.innerHTML = `<p class="empty">No results yet. The first evening run creates the teams.</p>${DISCLAIMER}`;
     return;
   }
   setAsOf(teamRows[0].as_of);
   const start = teamRows.map((r) => r.start_date).sort()[0];
   const [equity, bench] = await Promise.all([
-    q("equity_daily", { select: "team_id,date,total_equity", team_id: inList(teamRows.map((r) => r.team_id)), order: "date.asc" }),
-    q("benchmark_daily", { select: "date,equity", date: `gte.${start}`, order: "date.asc" }),
+    qAll("equity_daily", { select: "team_id,date,total_equity", team_id: inList(teamRows.map((r) => r.team_id)), order: "date.asc,team_id.asc" }),
+    qAll("benchmark_daily", { select: "date,equity", date: `gte.${start}`, order: "date.asc" }),
   ]);
   const series = teamRows.map((r) => ({
     name: r.name, points: equity.filter((e) => e.team_id === r.team_id).map((e) => ({ date: e.date, value: e.total_equity })),
@@ -31,9 +33,10 @@ export async function leaderboard(el, setAsOf) {
 
   const top = teamRows[0];
   const vs = spy && top.total_return != null && spy.total_return != null ? top.total_return - spy.total_return : null;
-  const practice = teams.some((t) => t.config?.mode === "practice");
+  const practice = active.some((t) => t.config?.mode === "practice");
+  const retired = teams.filter((t) => t.status === "retired" && t.config?.mode === active[0]?.config?.mode);
   const row = (r, i) => `
-    <li class="team-row${r.is_benchmark ? " bench" : ""}">
+    <li class="team-row${r.is_benchmark ? " bench" : ""}"${r.is_benchmark ? "" : ` data-team="${r.team_id}" role="button" tabindex="0"`}>
       <span class="name"><span class="rank">${r.is_benchmark ? "–" : i + 1}</span>${esc(r.name)}</span>
       <span class="eq num">${money(r.equity)}</span>
       <span class="stats">
@@ -53,14 +56,62 @@ export async function leaderboard(el, setAsOf) {
     </section>
     <section>
       ${lineChart(series)}
-      <div class="legend" style="margin-top:8px">${series.map((s) => `<span class="${s.bench ? "dash" : ""}"><i style="${s.bench ? "" : "background:var(--fg)"}"></i>${esc(s.name)}</span>`).join("")}</div>
+      <div class="legend" style="margin-top:8px">${series.map((s, i) => `<span class="${s.bench ? "dash" : ""}"><i style="${s.bench ? "" : `background:var(--fg);opacity:${SERIES_OPACITY[i] ?? 0.3}`}"></i>${esc(s.name)}</span>`).join("")}</div>
     </section>
     <section>
       <p class="label">Leaderboard</p>
       <ul class="rows">${teamRows.map(row).join("")}${spy ? row(spy, 0) : ""}</ul>
-      <p class="note" style="margin-top:8px">Sharpe needs months of data to mean anything. Short-term results are mostly luck.</p>
+      <p class="note" style="margin-top:8px">Tap a team for its positions, trades and settings. Sharpe needs months of data to mean anything; short-term results are mostly luck.</p>
     </section>
+    ${retired.length ? `<section><p class="label">Retired teams</p><ul class="rows">${retired.map((t) => `
+      <li class="team-row bench" data-team="${t.id}" role="button" tabindex="0"><span class="name">${esc(t.name)}</span>
+        <span class="muted" style="text-align:right;font-size:12px">gen ${t.generation ?? 0} · retired ${day(t.retired_at)}</span></li>`).join("")}</ul></section>` : ""}
     ${DISCLAIMER}`;
+  el.querySelectorAll("[data-team]").forEach((li) => li.addEventListener("click", () => showTeam(+li.dataset.team, rows)));
+}
+
+export const SERIES_OPACITY = [1, 0.55, 0.3, 0.2];
+let allTeams = [];
+
+const SETTING_LABELS = {
+  holding_style: "Holding style", news_weight: "News weight", min_source_trust: "Min source trust",
+  min_conviction: "Min conviction", max_candidates_per_day: "Candidates per day", fact_card_lookback_days: "News lookback (days)",
+};
+
+async function showTeam(id, boardRows) {
+  const t = allTeams.find((x) => x.id === id);
+  const [positions, trades, pf] = await Promise.all([
+    q("positions", { select: "ticker,shares,avg_cost,opened_at", team_id: `eq.${id}`, order: "ticker.asc" }),
+    q("trades", { select: "ticker,side,shares,fill_price,fees,executed_at", team_id: `eq.${id}`, order: "id.desc", limit: 15 }),
+    q("portfolios", { select: "cash,start_date,brake_active", team_id: `eq.${id}` }),
+  ]);
+  const board = boardRows.find((r) => r.team_id === id);
+  const parent = allTeams.find((x) => x.id === t.parent_team_id);
+  const children = allTeams.filter((x) => x.parent_team_id === id);
+  const c = t.config || {};
+  const kv = (k, v) => `<div class="kv"><span>${k}</span><span>${v}</span></div>`;
+  openSheet(`
+    <div class="sheet-title"><h2 class="display">${esc(t.name)}</h2><span class="chip">${esc(t.status)}</span></div>
+    <p class="note" style="margin-top:-12px">Generation ${t.generation ?? 0} · started ${day(pf[0]?.start_date || t.created_at)}${c.mode === "practice" ? " · practice" : ""}${pf[0]?.brake_active ? " · drawdown brake on" : ""}</p>
+    ${board ? `<div class="verdict"><div><span>Equity</span><b>${money(board.equity)}</b></div>
+      <div><span>Return</span><b class="${tone(board.total_return)}">${pct(board.total_return)}</b></div>
+      <div><span>Cash</span><b>${money(pf[0]?.cash)}</b></div></div>` : ""}
+    <section><p class="label">Positions · ${positions.length}</p>
+      ${positions.length ? positions.map((p) => kv(`<b class="num" style="color:var(--fg)">${esc(p.ticker)}</b> · since ${day(p.opened_at)}`, `${p.shares} @ ${num(p.avg_cost)}`)).join("") : `<p class="note">No positions.</p>`}
+      <p class="note" style="margin-top:6px">Cost basis includes fees. Live prices aren't shown (data licence).</p>
+    </section>
+    <section><p class="label">Recent trades</p>
+      ${trades.length ? trades.map((x) => kv(`<span class="${x.side === "buy" ? "up" : "down"}">${esc(x.side)}</span> ${esc(x.ticker)} · ${day(x.executed_at)}`, `${x.shares} @ ${num(x.fill_price)}`)).join("") : `<p class="note">No trades yet.</p>`}
+    </section>
+    <section><p class="label">Settings</p>
+      ${Object.entries(SETTING_LABELS).filter(([k]) => k in c).map(([k, label]) => kv(label, esc(c[k]))).join("")}
+      ${c.models ? kv("Judge model", esc(c.models.judge || "default")) : ""}
+    </section>
+    <section><p class="label">Lineage</p>
+      ${kv("Parent", parent ? esc(parent.name) : "founder")}
+      ${t.mutation ? kv("Changed", esc(t.mutation)) : ""}
+      ${children.length ? kv("Children", children.map((x) => esc(x.name)).join(", ")) : ""}
+    </section>`);
 }
 
 // ---------- Decisions ----------

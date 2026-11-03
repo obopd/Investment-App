@@ -16,7 +16,7 @@ export function lineChart(series, { height = 170 } = {}) {
   const lines = rets.map((pts, i) => {
     const d = pts.map((p, j) => `${j ? "L" : "M"}${x(p.date).toFixed(2)},${y(p.r).toFixed(2)}`).join("");
     const cls = series[i].bench ? "line bench" : "line";
-    const stroke = series[i].bench ? "" : ` style="stroke:var(--fg);opacity:${i === 0 ? 1 : 0.55}"`;
+    const stroke = series[i].bench ? "" : ` style="stroke:var(--fg);opacity:${[1, 0.55, 0.3, 0.2][i] ?? 0.2}"`;
     return `<path class="${cls}" d="${d}"${stroke}/>`;
   }).join("");
   return `<svg class="chart" viewBox="0 0 100 ${height}" preserveAspectRatio="none" role="img" aria-label="Return since start">

@@ -131,10 +131,14 @@ def cards_text(cards: list[dict], ticker: str | None = None) -> str:
 
 
 # ---------- practice-mode stand-ins ----------
-def mock_analyst(inputs, k, allowed):
+def mock_analyst(inputs, k, allowed, cfg=None):
+    """Practice stand-in: a simple rule that follows the team's style, so teams differ."""
+    cfg = cfg or {}
     pf, prices = inputs["portfolio"], inputs["prices"]
-    ranked = sorted((t for t in allowed if prices[t]["ret_20d"] is not None),
-                    key=lambda t: prices[t]["ret_20d"], reverse=True)
+    # Long-term teams rank by 60-day trend, news-heavy teams by the fresh 5-day move, others by 20-day.
+    key = "ret_60d" if cfg.get("holding_style") == "long" else "ret_5d" if cfg.get("news_weight", 0) >= 0.6 else "ret_20d"
+    ranked = sorted((t for t in allowed if prices[t].get(key) is not None),
+                    key=lambda t: prices[t][key], reverse=True)
     cands = []
     for t, p in pf.positions.items():
         if prices.get(t, {}).get("ret_5d") is not None and prices[t]["ret_5d"] < -0.03:
@@ -144,13 +148,16 @@ def mock_analyst(inputs, k, allowed):
             break
         if t not in pf.positions:
             cards = [c["id"] for c in inputs["fact_cards"] if c["ticker"] == t][:2]
-            cands.append({"ticker": t, "action": "buy", "report": f"[practice] {t} has the strongest 20-day trend ({prices[t]['ret_20d']:+.1%}).", "fact_card_ids": cards})
+            label = {"ret_60d": "60-day", "ret_5d": "5-day", "ret_20d": "20-day"}[key]
+            cands.append({"ticker": t, "action": "buy", "report": f"[practice] {t} has one of the strongest {label} moves ({prices[t][key]:+.1%}).", "fact_card_ids": cards})
     return {"market_summary": "[practice] Placeholder analysis; no real AI was used.", "candidates": cands[:k]}
 
 
 def mock_verdict(c: Candidate):
     sell = c.action in ("reduce", "sell")
-    return {"ticker": c.ticker, "action": "sell" if sell else "buy", "conviction": 0.7,
+    # Vary conviction a little so each team's minimum-conviction setting actually matters.
+    conviction = 0.55 + (sum(map(ord, c.ticker)) % 5) * 0.05
+    return {"ticker": c.ticker, "action": "sell" if sell else "buy", "conviction": round(conviction, 2),
             "target_weight": 0.0 if sell else 0.10, "reasoning": "[practice] Placeholder verdict.",
             "key_evidence": [f"#{i}" for i in c.fact_card_ids] or ["20-day trend"],
             "main_risk": "[practice] Trend may reverse."}
@@ -201,6 +208,7 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
         return summary
 
     k = cfg.get("max_candidates_per_day", 3)
+    models = cfg.get("models") or {}   # this team's model per role (e.g. a stronger judge)
     card_ids = {c["id"] for c in inputs["fact_cards"]}
     allowed = sorted(t for t in prices if t != benchmark)  # the benchmark itself isn't traded
     analyst_sys = prompts.ANALYST.format(k=k, style="short-term (days to weeks)" if cfg.get("holding_style") == "short" else "long-term (weeks to months)",
@@ -212,7 +220,7 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
     try:
         result = llm.json("analyst", analyst_sys, analyst_prompt, ANALYST_SCHEMA,
                           validate_analyst(k, set(allowed), card_ids), max_tokens=6000,
-                          mock=lambda: mock_analyst(inputs, k, allowed))
+                          mock=lambda: mock_analyst(inputs, k, allowed, cfg), model_key=models.get("analyst"))
         if result is None:
             record(None, "skipped: invalid analyst output", analyst_report="The analyst's reply failed validation twice.")
             return summary
@@ -228,13 +236,13 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
             case = (f"Decision date: {run_date}. Proposed action: {c.action.upper()} {c.ticker}.\n"
                     f"Analyst report: {c.report}\n\nPRICES\n{prices_text(prices, [c.ticker, 'SPY'])}\n\n"
                     f"EVIDENCE\n{evidence}\n\nPORTFOLIO\n{portfolio_text(pf, closes)}")
-            bull = llm.text("bull", prompts.BULL, case, max_tokens=2000,
+            bull = llm.text("bull", prompts.BULL, case, max_tokens=2000, model_key=models.get("bull"),
                             mock=lambda c=c: f"[practice] Case for {c.action} {c.ticker}: trend and cited cards.")
-            bear = llm.text("bear", prompts.BEAR, case, max_tokens=2000,
+            bear = llm.text("bear", prompts.BEAR, case, max_tokens=2000, model_key=models.get("bear"),
                             mock=lambda c=c: f"[practice] Case against {c.action} {c.ticker}: evidence is thin.")
             judge_prompt = case + f"\n\nBULL\n{bull or '(missing)'}\n\nBEAR\n{bear or '(missing)'}\n\nReturn the verdict for {c.ticker}."
             verdict = llm.json("judge", prompts.JUDGE, judge_prompt, JUDGE_SCHEMA, validate_judge(c.ticker),
-                               max_tokens=6000, mock=lambda c=c: mock_verdict(c))
+                               max_tokens=6000, mock=lambda c=c: mock_verdict(c), model_key=models.get("judge"))
             if verdict is None:
                 record(c.ticker, "skipped: invalid judge output", c.report, bull, bear)
                 continue

@@ -24,6 +24,7 @@ from arena.data.prices import TiingoProvider, collect_prices, history_start_from
 from arena.data.tagging import TickerTagger
 from arena.db.client import MemoryDB, SupabaseDB
 from arena.facts.extract import extract_fact_cards
+from arena.learning.evolution import maybe_evolve
 from arena.learning.postmortem import write_post_mortems
 from arena.trust.scoring import corroborate, evaluate_claims
 from arena.http import make_session
@@ -50,31 +51,35 @@ def seed_stocks(db) -> dict:
 
 
 def seed_teams(db, run_date: date, mode: str, starting_cash: float) -> list[dict]:
-    """Create configured teams for the current mode; retire teams from the other mode.
-    Practice and live never mix: going live starts fresh teams with fresh imaginary money."""
-    wanted = config.load("teams")["teams"]
-    active = db.select("teams", {"status": "active"})
-    for t in active:
+    """Make sure the founding teams exist for the current mode and return the active teams.
+
+    Practice and live never mix: switching mode retires the other mode's teams and starts fresh
+    founders with fresh imaginary money. A founder retired by evolution is not recreated; its
+    descendants carry on. Config edits in teams.yaml apply to founders (generation 0) only.
+    """
+    founders = config.load("teams")["teams"]
+    for t in db.select("teams", {"status": "active"}, order="id.asc"):
         if (t.get("config") or {}).get("mode") != mode:
             db.update("teams", {"id": t["id"]}, {"status": "retired", "retired_at": utcnow()})
             db.update("orders", {"team_id": t["id"], "status": "pending"},
                       {"status": "cancelled", "reason": "team retired"})
-    teams = []
-    for cfg in wanted:
+    mine = [t for t in db.select("teams", order="id.asc") if (t.get("config") or {}).get("mode") == mode]
+    fresh_start = not any(t["status"] == "active" for t in mine)
+    for cfg in founders:
         name = cfg["name"] + (" (practice)" if mode == "practice" else "")
-        found = [t for t in db.select("teams", {"name": name, "status": "active"})]
-        if found:
-            team = found[0]
-            if team["config"] != {**cfg, "mode": mode}:   # config edits apply from the next run
-                db.update("teams", {"id": team["id"]}, {"config": {**cfg, "mode": mode}})
-                team["config"] = {**cfg, "mode": mode}
-        else:
-            team = db.insert("teams", [{"name": name, "generation": 0, "config": {**cfg, "mode": mode},
-                                        "status": "active"}], returning=True)[0]
+        want = {**cfg, "mode": mode}
+        same = [t for t in mine if t["name"] == name and (t.get("generation") or 0) == 0]
+        active = [t for t in same if t["status"] == "active"]
+        if active:
+            if active[0]["config"] != want:   # config edits apply from the next run
+                db.update("teams", {"id": active[0]["id"]}, {"config": want})
+        elif fresh_start or not same:
+            team = db.insert("teams", [{"name": name, "generation": 0, "config": want, "status": "active"}],
+                             returning=True)[0]
             db.insert("portfolios", [{"team_id": team["id"], "cash": starting_cash,
                                       "peak_equity": starting_cash, "start_date": run_date}])
-        teams.append(team)
-    return teams
+    return [t for t in db.select("teams", {"status": "active"}, order="id.asc")
+            if (t.get("config") or {}).get("mode") == mode]
 
 
 def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
@@ -174,6 +179,15 @@ def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
     # 7. Post-mortems on closed trades -> lesson book (cheap model).
     if llm.available:
         step("post_mortems", lambda: write_post_mortems(db, llm, teams, config.load("learning"), now))
+
+    # 7b. Monthly evolution (first trading day of the month, with safeguards).
+    def evolve():
+        res = maybe_evolve(db, run_date, mode, config.load("evolution"), risk_cfg["starting_cash"], now)
+        if res.get("child"):
+            teams[:] = [t for t in db.select("teams", {"status": "active"}, order="id.asc")
+                        if (t.get("config") or {}).get("mode") == mode]
+        return res
+    step("evolution", evolve)
 
     # 8. Team decisions -> orders for the next trading day's open. Only after the close: a
     # run started during the trading day would decide on stale data and use up the day.

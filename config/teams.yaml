@@ -1,4 +1,6 @@
-# Phase 2 runs one team; Phase 5 adds the other two.
+# Founding teams (generation 0). Monthly evolution later replaces the worst team with a mutated
+# copy of the best one; those children live only in the database, not in this file.
+# models: which entry of config/models.yaml each role uses (overrides the default "roles" there).
 teams:
   - name: Momentum
     holding_style: short          # short | long
@@ -9,3 +11,26 @@ teams:
     fact_card_lookback_days: 7
     max_fact_cards_in_prompt: 40
     shared_lessons: false
+    models: {analyst: cheap, bull: cheap, bear: cheap, judge: strong}
+
+  - name: Newshound
+    holding_style: short
+    news_weight: 0.8              # leans on fresh news and filings
+    min_source_trust: 0.55        # stricter about who it listens to
+    min_conviction: 0.65
+    max_candidates_per_day: 3
+    fact_card_lookback_days: 4
+    max_fact_cards_in_prompt: 50
+    shared_lessons: false
+    models: {analyst: cheap, bull: cheap, bear: cheap, judge: strong}
+
+  - name: Steady
+    holding_style: long           # weeks to months, fewer trades
+    news_weight: 0.5
+    min_source_trust: 0.5
+    min_conviction: 0.7
+    max_candidates_per_day: 2
+    fact_card_lookback_days: 14
+    max_fact_cards_in_prompt: 40
+    shared_lessons: false
+    models: {analyst: cheap, bull: cheap, bear: cheap, judge: strong}

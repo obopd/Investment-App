@@ -16,3 +16,13 @@ export async function q(table, params = {}) {
 }
 
 export const inList = (ids) => `in.(${[...new Set(ids)].join(",")})`;
+
+// Supabase returns at most 1000 rows per request; page through longer results (needs an order).
+export async function qAll(table, params = {}) {
+  const out = [];
+  for (let offset = 0; ; offset += 1000) {
+    const page = await q(table, { ...params, limit: 1000, offset });
+    out.push(...page);
+    if (page.length < 1000) return out;
+  }
+}
