@@ -256,3 +256,46 @@ async function showReview(pmId, lesson) {
     ${block("What was missed", pm?.what_was_missed)}
     ${!pm ? `<p class="muted">No review found.</p>` : ""}`);
 }
+
+// ---------- Source trust ----------
+export async function sources(el) {
+  const [rows, teams] = await Promise.all([
+    q("sources", { select: "id,name,domain,trust_alpha,trust_beta,trust_score,claims_evaluated", order: "claims_evaluated.desc,trust_score.desc", limit: 300 }),
+    q("teams", { select: "config", status: "eq.active" }),
+  ]);
+  const practice = teams.length && teams.every((t) => t.config?.mode === "practice");
+  const rated = rows.filter((s) => s.claims_evaluated > 0).sort((a, b) => b.trust_score - a.trust_score || b.claims_evaluated - a.claims_evaluated);
+  const unrated = rows.filter((s) => !s.claims_evaluated);
+  const row = (s) => `
+    <li><button class="src-row" data-id="${s.id}">
+      <span class="mid"><span class="act">${esc(s.name)}</span><span class="meta">${esc(s.domain)}${s.claims_evaluated ? ` · ${Math.round(s.trust_alpha - 1)} right · ${Math.round(s.trust_beta - 1)} wrong` : ""}</span></span>
+      <span class="score-bar"><i style="transform:scaleX(${s.trust_score ?? 0.5})"></i></span>
+      <span class="num trust">${num(s.trust_score ?? 0.5)}</span>
+    </button></li>`;
+  el.innerHTML = `
+    <p class="note">A source's trust rises when its claims come true (stock vs SPY after 5 or 20 trading days) and falls when they don't. New sources start at 0.50. A price move doesn't prove a claim true or false; trust is a statistical signal that only means something over many claims.</p>
+    ${practice ? `<p class="chip" style="justify-self:start">Practice mode · trust scoring starts with real AI</p>` : ""}
+    <section><p class="label">Rated · ${rated.length}</p>
+      ${rated.length ? `<ul class="rows">${rated.map(row).join("")}</ul>` : `<p class="note">No claims have matured yet. The first ones settle 5 trading days after real AI starts reading the news.</p>`}</section>
+    <section><p class="label">Not rated yet · ${unrated.length}</p><ul class="rows">${unrated.map(row).join("")}</ul></section>
+    ${DISCLAIMER}`;
+  el.querySelectorAll(".src-row").forEach((b) => b.addEventListener("click", () => showSource(rows.find((s) => s.id === +b.dataset.id))));
+}
+
+async function showSource(s) {
+  const links = await q("fact_card_sources", { select: "fact_card_id", source_id: `eq.${s.id}`, order: "fact_card_id.desc", limit: 25 });
+  const ids = links.map((l) => l.fact_card_id);
+  const [cards, evals] = ids.length ? await Promise.all([
+    q("fact_cards", { select: "id,ticker,claim,direction,horizon_days,corroborated,published_at", id: inList(ids), order: "id.desc" }),
+    q("claim_evaluations", { select: "fact_card_id,outcome,excess_return", fact_card_id: inList(ids) }),
+  ]) : [[], []];
+  const ev = Object.fromEntries(evals.map((e) => [e.fact_card_id, e]));
+  const badge = (e) => !e ? `<span class="chip">pending</span>` : `<span class="chip ${e.outcome === "correct" ? "buy" : e.outcome === "incorrect" ? "sell" : ""}">${esc(e.outcome)}</span>`;
+  openSheet(`
+    <div class="sheet-title"><h2 class="display">${esc(s.name)}</h2><span class="chip">${num(s.trust_score ?? 0.5)}</span></div>
+    <p class="note" style="margin-top:-12px">${esc(s.domain)} · ${s.claims_evaluated} claim(s) judged</p>
+    <section><p class="label">Recent claims</p>
+      ${cards.length ? `<ul class="evidence">${cards.map((c) => `<li class="text">${esc(c.claim)}
+        <small>${esc(c.ticker || "macro")} · ${esc(c.direction)} · ${c.horizon_days}d${c.corroborated ? " · corroborated" : ""}${ev[c.id]?.excess_return != null ? ` · vs SPY ${pct(ev[c.id].excess_return)}` : ""} ${badge(ev[c.id])}</small></li>`).join("")}</ul>` : `<p class="note">No claims yet.</p>`}
+    </section>`);
+}

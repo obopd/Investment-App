@@ -19,6 +19,10 @@ on:
         description: "Run even if the market was closed"
         type: boolean
         default: false
+      skip_collect:
+        description: "Skip fetching prices/news/filings (quick check)"
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -47,6 +51,7 @@ jobs:
           INPUT_DATE: ${{ inputs.date }}
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
           INPUT_FORCE: ${{ inputs.force }}
+          INPUT_SKIP_COLLECT: ${{ inputs.skip_collect }}
         run: |
           args=()
           if [ -n "$INPUT_DATE" ]; then
@@ -55,4 +60,5 @@ jobs:
           fi
           [ "$INPUT_DRY_RUN" = "true" ] && args+=(--dry-run)
           [ "$INPUT_FORCE" = "true" ] && args+=(--force)
+          [ "$INPUT_SKIP_COLLECT" = "true" ] && args+=(--skip-collect)
           python -m arena.pipeline "${args[@]}"

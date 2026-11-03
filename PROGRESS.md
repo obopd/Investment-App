@@ -23,7 +23,7 @@
 - Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
 - Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
 - Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
-- 82 tests passing, including a multi-day simulation.
+- 94 tests passing, including a multi-day simulation.
 - Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
 
 ## Done — Phase 3 (post-mortems and lesson book)
@@ -33,8 +33,16 @@
 - Lessons with ≥4 uses and score < 0.35 are deactivated (never deleted); near-duplicates are merged; max 30 active per team. Settings in `config/learning.yaml`. Shared book via `shared_lessons: true` in a team's config.
 - Dashboard: Lesson book tab (book icon) with scores, usage, inactive lessons and recent reviews.
 
-## Next — Phase 4
-Source trust scoring and corroboration, plus source trust page.
+## Done — Phase 4 (source trust and corroboration)
+- Each live fact card is judged when its horizon (5 or 20 trading days) passes: stock return minus SPY from the last close before publication. Beyond ±1% (5d) / ±2% (20d) = correct/incorrect, otherwise unclear (no change). Settings in `config/trust.yaml`.
+- A later claim from an official source (SEC filings, company newsrooms) with the same ticker and type but the opposite direction marks the earlier claim incorrect.
+- Every source that made a claim gets the result: alpha = correct + 1, beta = incorrect + 1, trust = alpha / (alpha + beta). Practice cards are never scored, so trust only moves once real AI reads the news.
+- Claims repeated by ≥2 sources with trust ≥ 0.5 are labelled corroborated; teams see the label.
+- Dashboard: Source trust tab (shield icon), tap a source for its recent claims and outcomes.
+- `--skip-collect` flag / workflow option for quick checks that don't use the Tiingo hourly limit.
+
+## Next — Phase 5
+Three teams, monthly evolution with safeguards and lineage, team detail page.
 
 ## Data sources and terms
 - **Tiingo** (prices): free plan is for personal/non-commercial use; raw data may not be redistributed. So `prices_daily` is not readable with the public dashboard key. Free limits are roughly 50 requests/hour and 1,000/day; a daily run uses ~31.
