@@ -44,3 +44,8 @@ def test_select_builds_filters():
         "prices_daily", {"ticker": "AAPL", "date": ("gte", "2026-01-01")}, columns="date", order="date.desc", limit=1)
     assert rec.calls[0][2]["params"] == {"select": "date", "ticker": "eq.AAPL", "date": "gte.2026-01-01",
                                          "order": "date.desc", "limit": "1"}
+
+
+def test_url_with_rest_path_is_accepted():
+    for url in ("https://x.supabase.co", "https://x.supabase.co/", "https://x.supabase.co/rest/v1/"):
+        assert SupabaseDB(url, "k", Recorder()).base == "https://x.supabase.co/rest/v1"

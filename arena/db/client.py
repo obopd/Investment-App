@@ -31,7 +31,11 @@ def _clean(row: dict) -> dict:
 
 class SupabaseDB:
     def __init__(self, url: str, key: str, session: requests.Session | None = None):
-        self.base = url.rstrip("/") + "/rest/v1"
+        # Accept the project URL with or without the "/rest/v1" API path people often copy.
+        url = url.strip().rstrip("/")
+        if url.endswith("/rest/v1"):
+            url = url[: -len("/rest/v1")]
+        self.base = url + "/rest/v1"
         self.s = session or requests.Session()
         self.s.headers["apikey"] = key
         # Legacy service_role keys are JWTs and go in Authorization; new sb_secret_ keys don't.
