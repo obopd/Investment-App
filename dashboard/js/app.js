@@ -1,4 +1,4 @@
-import { configured } from "./api.js";
+import { clearCache, configured } from "./api.js";
 import { day } from "./format.js";
 import * as views from "./views.js";
 
@@ -10,29 +10,50 @@ const RENDER = { board: views.leaderboard, decisions: views.decisions, lessons: 
 
 const setAsOf = (iso) => { asof.textContent = iso ? `as of ${day(iso)}` : ""; };
 
+let current = 0;   // only the latest tap may draw; a slower earlier load is thrown away
+
 async function show(name, { animate = true } = {}) {
   if (!RENDER[name]) name = "board";
+  const token = ++current;
   tabs.forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   if (location.hash.slice(1) !== name) history.replaceState(null, "", `#${name}`);
   if (!configured) {
     view.innerHTML = `<p class="empty">Not connected yet. The dashboard workflow fills in the Supabase address and public key.</p>`;
     return;
   }
-  refresh.classList.add("spin");
+  // Draw into a fresh box off-screen, then swap it in whole: no half-drawn pages.
+  const box = document.createElement("div");
+  box.className = "view-box";
+  const spin = setTimeout(() => refresh.classList.add("spin"), 150);   // only for slow loads
   try {
-    await RENDER[name](view, setAsOf);
+    await RENDER[name](box, (iso) => { if (token === current) setAsOf(iso); });
   } catch (e) {
-    view.innerHTML = `<p class="empty">Couldn't load data.<br><span class="note">${String(e.message).replace(/</g, "&lt;")}</span></p>`;
+    box.innerHTML = `<p class="empty">Couldn't load data.<br><span class="note">${String(e.message).replace(/</g, "&lt;")}</span></p>`;
   } finally {
-    refresh.classList.remove("spin");
+    clearTimeout(spin);
+    if (token === current) refresh.classList.remove("spin");
   }
-  if (animate) { view.classList.remove("view-enter"); void view.offsetWidth; view.classList.add("view-enter"); }
+  if (token !== current) return;
+  view.replaceChildren(box);
+  if (animate) { box.classList.add("view-enter"); }
 }
 
+// Warm the other tabs in the background after the first page is up.
+function prefetch() {
+  const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 300));
+  idle(() => Object.entries(RENDER).forEach(([name, fn]) => {
+    if (name !== location.hash.slice(1)) fn(document.createElement("div"), () => {}).catch(() => {});
+  }));
+}
+
+let hiddenAt = 0;
 tabs.forEach((t) => t.addEventListener("click", () => { window.scrollTo(0, 0); show(t.dataset.tab); }));
-refresh.addEventListener("click", () => show(location.hash.slice(1), { animate: false }));
-document.addEventListener("visibilitychange", () => { if (!document.hidden) show(location.hash.slice(1), { animate: false }); });
+refresh.addEventListener("click", () => { clearCache(); show(location.hash.slice(1), { animate: false }); });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { hiddenAt = Date.now(); return; }
+  if (Date.now() - hiddenAt > 60_000) { clearCache(); show(location.hash.slice(1), { animate: false }); }
+});
 window.addEventListener("hashchange", () => show(location.hash.slice(1)));
-show(location.hash.slice(1));
+show(location.hash.slice(1)).then(prefetch);
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});

@@ -23,7 +23,7 @@
 - Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
 - Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
 - Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
-- 109 tests passing, including a multi-day simulation.
+- 110 tests passing, including a multi-day simulation.
 - Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
 
 ## Done — Phase 3 (post-mortems and lesson book)
@@ -59,6 +59,9 @@
 ## Done — after Phase 6 (owner requests)
 - Dashboard shows full company names everywhere instead of tickers; AI prompts ask for full names in written text.
 - Decisions tab: team buttons (All / each team), "Planned" orders with the expected time (next market open, 9:30am New York, also in the viewer's own time zone), "Bought & sold" with shares, price and time, then the decision list.
+
+- Teams renamed to **A** (short-term price trends, was Momentum), **B** (news, was Newshound), **C** (long-term, was Steady); no "(practice)" suffix. Teams keep their history: `config/teams.yaml` has a stable `key` and `formerly` names. Evolved children are named A2, A3...
+- Dashboard tab switches are instant: answers are cached for a minute, other tabs are pre-loaded in the background, and a slow earlier load can't overwrite a newer tab.
 
 ## Next
 All six phases are built. Remaining: switch to live AI when ready (see docs/SETUP.md section 7), then let it run for months before judging results.

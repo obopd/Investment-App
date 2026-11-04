@@ -59,7 +59,9 @@ def mutate(config: dict, space: dict, count_range, rng: random.Random) -> tuple[
 
 
 def base_name(name: str) -> str:
-    return re.sub(r"( g\d+)?( \(practice\))?$", "", name)
+    """'A3' -> 'A' (also handles older names like 'Momentum g2 (practice)')."""
+    name = re.sub(r"( g\d+)?( \(practice\))?$", "", name)
+    return re.sub(r"(?<=\D)\d+$", "", name) or name
 
 
 def _d(v):
@@ -105,7 +107,7 @@ def maybe_evolve(db, run_date: date, mode: str, cfg: dict, starting_cash: float,
 
     db.update("teams", {"id": worst["id"]}, {"status": "retired", "retired_at": now})
     db.update("orders", {"team_id": worst["id"], "status": "pending"}, {"status": "cancelled", "reason": "team retired by evolution"})
-    name = f"{base_name(best['name'])} g{gen}" + (" (practice)" if mode == "practice" else "")
+    name = f"{base_name(best['name'])}{gen + 1}"   # A -> A2 -> A3 ...
     child = db.insert("teams", [{"name": name, "generation": gen, "parent_team_id": best["id"],
                                  "mutation": "; ".join(notes), "config": child_cfg, "status": "active",
                                  "created_at": now}], returning=True)[0]
