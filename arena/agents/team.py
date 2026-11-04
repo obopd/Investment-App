@@ -4,6 +4,7 @@ from datetime import date
 
 from pydantic import BaseModel, Field, ValidationError
 
+from arena import config
 from arena.agents import prompts
 from arena.agents.inputs import build_inputs
 from arena.lookahead import LookAheadError
@@ -143,14 +144,14 @@ def mock_analyst(inputs, k, allowed, cfg=None):
     cands = []
     for t, p in pf.positions.items():
         if prices.get(t, {}).get("ret_5d") is not None and prices[t]["ret_5d"] < -0.03:
-            cands.append({"ticker": t, "action": "reduce", "report": f"[practice] {t} fell {prices[t]['ret_5d']:.1%} in 5 days.", "fact_card_ids": []})
+            cands.append({"ticker": t, "action": "reduce", "report": f"[practice] {config.stock_name(t)} fell {prices[t]['ret_5d']:.1%} in 5 days.", "fact_card_ids": []})
     for t in ranked:
         if len(cands) >= k:
             break
         if t not in pf.positions:
             cards = [c["id"] for c in inputs["fact_cards"] if c["ticker"] == t][:2]
             label = {"ret_60d": "60-day", "ret_5d": "5-day", "ret_20d": "20-day"}[key]
-            cands.append({"ticker": t, "action": "buy", "report": f"[practice] {t} has one of the strongest {label} moves ({prices[t][key]:+.1%}).", "fact_card_ids": cards})
+            cands.append({"ticker": t, "action": "buy", "report": f"[practice] {config.stock_name(t)} has one of the strongest {label} moves ({prices[t][key]:+.1%}).", "fact_card_ids": cards})
     return {"market_summary": "[practice] Placeholder analysis; no real AI was used.", "candidates": cands[:k]}
 
 
@@ -253,9 +254,9 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
                     f"Analyst report: {c.report}\n\nPRICES\n{prices_text(prices, [c.ticker, 'SPY'])}\n\n"
                     f"EVIDENCE\n{evidence}\n\nPORTFOLIO\n{portfolio_text(pf, closes)}")
             bull = llm.text("bull", prompts.BULL, case, max_tokens=2000, model_key=models.get("bull"),
-                            mock=lambda c=c: f"[practice] Case for {c.action} {c.ticker}: trend and cited cards.")
+                            mock=lambda c=c: f"[practice] Case for {c.action} {config.stock_name(c.ticker)}: trend and cited cards.")
             bear = llm.text("bear", prompts.BEAR, case, max_tokens=2000, model_key=models.get("bear"),
-                            mock=lambda c=c: f"[practice] Case against {c.action} {c.ticker}: evidence is thin.")
+                            mock=lambda c=c: f"[practice] Case against {c.action} {config.stock_name(c.ticker)}: evidence is thin.")
             judge_prompt = case + f"\n\nBULL\n{bull or '(missing)'}\n\nBEAR\n{bear or '(missing)'}\n\nReturn the verdict for {c.ticker}."
             verdict = llm.json("judge", prompts.JUDGE, judge_prompt, JUDGE_SCHEMA, validate_judge(c.ticker),
                                max_tokens=6000, mock=lambda c=c: mock_verdict(c), model_key=models.get("judge"))

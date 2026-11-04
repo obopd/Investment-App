@@ -1,7 +1,18 @@
 import { q, qAll, inList } from "./api.js";
 import { lineChart } from "./chart.js";
-import { ago, day, dayYear, esc, money, num, pct, tone } from "./format.js";
+import { ago, day, dayYear, esc, localTime, marketOpen, money, money2, num, nyTime, pct, tone } from "./format.js";
 import { openSheet } from "./sheet.js";
+
+// Full company names instead of tickers (e.g. "Walmart", not "WMT").
+let stockNames = null;
+async function loadStockNames() {
+  if (!stockNames) {
+    const rows = await q("stocks", { select: "ticker,name" });
+    stockNames = Object.fromEntries(rows.map((r) => [r.ticker, r.name.replace(/ \(benchmark\)$/, "")]));
+  }
+  return stockNames;
+}
+const stockName = (t) => (stockNames && stockNames[t]) || t;
 
 const DISCLAIMER = `<p class="note disclaimer">Experimental simulation with imaginary money. Not investment advice.</p>`;
 
@@ -79,6 +90,7 @@ const SETTING_LABELS = {
 };
 
 async function showTeam(id, boardRows) {
+  await loadStockNames();
   const t = allTeams.find((x) => x.id === id);
   const [positions, trades, pf] = await Promise.all([
     q("positions", { select: "ticker,shares,avg_cost,opened_at", team_id: `eq.${id}`, order: "ticker.asc" }),
@@ -97,11 +109,11 @@ async function showTeam(id, boardRows) {
       <div><span>Return</span><b class="${tone(board.total_return)}">${pct(board.total_return)}</b></div>
       <div><span>Cash</span><b>${money(pf[0]?.cash)}</b></div></div>` : ""}
     <section><p class="label">Positions · ${positions.length}</p>
-      ${positions.length ? positions.map((p) => kv(`<b class="num" style="color:var(--fg)">${esc(p.ticker)}</b> · since ${day(p.opened_at)}`, `${p.shares} @ ${num(p.avg_cost)}`)).join("") : `<p class="note">No positions.</p>`}
+      ${positions.length ? positions.map((p) => kv(`<b style="color:var(--fg)">${esc(stockName(p.ticker))}</b> · since ${day(p.opened_at)}`, `${p.shares} shares · paid ${money2(p.avg_cost)}`)).join("") : `<p class="note">No positions.</p>`}
       <p class="note" style="margin-top:6px">Cost basis includes fees. Live prices aren't shown (data licence).</p>
     </section>
     <section><p class="label">Recent trades</p>
-      ${trades.length ? trades.map((x) => kv(`<span class="${x.side === "buy" ? "up" : "down"}">${esc(x.side)}</span> ${esc(x.ticker)} · ${day(x.executed_at)}`, `${x.shares} @ ${num(x.fill_price)}`)).join("") : `<p class="note">No trades yet.</p>`}
+      ${trades.length ? trades.map((x) => kv(`<span class="${x.side === "buy" ? "up" : "down"}">${x.side === "buy" ? "Bought" : "Sold"}</span> ${esc(stockName(x.ticker))} · ${day(x.executed_at)}`, `${x.shares} at ${money2(x.fill_price)}`)).join("") : `<p class="note">No trades yet.</p>`}
     </section>
     <section><p class="label">Settings</p>
       ${Object.entries(SETTING_LABELS).filter(([k]) => k in c).map(([k, label]) => kv(label, esc(c[k]))).join("")}
@@ -114,11 +126,12 @@ async function showTeam(id, boardRows) {
     </section>`);
 }
 
-// ---------- Decisions ----------
+// ---------- Decisions: plans, trades and debates, team by team ----------
 const PAGE = 40;
 let decOffset = 0;
 let decCache = [];
 let teamNames = {};
+let teamFilter = (() => { try { return localStorage.getItem("arena.team") || "all"; } catch { return "all"; } })();
 
 function actionClass(a = "") {
   return a.startsWith("buy") ? "buy" : a.startsWith("sell") ? "sell" : "";
@@ -132,48 +145,123 @@ function chipText(d) {
   return a.split(":")[0] || "–";
 }
 
+// "buy 72" -> "Buy 72 shares"
+function actionText(a = "") {
+  const m = a.match(/^(buy|sell) (\d+)(.*)$/);
+  return m ? `${m[1] === "buy" ? "Buy" : "Sell"} ${m[2]} shares${m[3]}` : a.charAt(0).toUpperCase() + a.slice(1);
+}
+
+const shortTeam = (n = "") => n.replace(/ \(practice\)$/, "");
+
+function whenRow(iso) {
+  const t = marketOpen(iso);
+  return `${nyTime(t)} New York · ${localTime(t)} your time`;
+}
+// Two lines so nothing gets cut off on a phone.
+function whenLines(iso) {
+  const t = marketOpen(iso);
+  return `<span class="when">${esc(nyTime(t))} · New York</span><span class="when">${esc(localTime(t))} · your time</span>`;
+}
+
 export async function decisions(el, setAsOf, { more = false } = {}) {
+  await loadStockNames();
+  const filter = teamFilter === "all" ? {} : { team_id: `eq.${teamFilter}` };
   if (!more) { decOffset = 0; decCache = []; }
-  const [rows, teams] = await Promise.all([
-    q("decisions", { select: "id,team_id,date,ticker,final_action,judge_verdict,risk_result", order: "date.desc,id.desc", limit: PAGE, offset: decOffset }),
-    more ? Promise.resolve(null) : q("teams", { select: "id,name" }),
+  const [rows, teams, planned, trades] = await Promise.all([
+    q("decisions", { select: "id,team_id,date,ticker,final_action,judge_verdict,risk_result", order: "date.desc,id.desc", limit: PAGE, offset: decOffset, ...filter }),
+    q("teams", { select: "id,name,status", order: "id.asc" }),
+    more ? null : q("orders", { select: "id,team_id,decision_id,ticker,side,shares,for_date,reason", status: "eq.pending", order: "for_date.asc,id.asc", ...filter }),
+    more ? null : q("trades", { select: "order_id,team_id,ticker,side,shares,fill_price,executed_at", order: "id.desc", limit: 30, ...filter }),
   ]);
-  if (teams) teamNames = Object.fromEntries(teams.map((t) => [t.id, t.name]));
+  teamNames = Object.fromEntries(teams.map((t) => [t.id, t.name]));
+  const active = teams.filter((t) => t.status === "active");
+  if (teamFilter !== "all" && !active.some((t) => String(t.id) === String(teamFilter))) {
+    teamFilter = "all";
+    return decisions(el, setAsOf);
+  }
   decCache = decCache.concat(rows);
   decOffset += rows.length;
-  if (!decCache.length) { el.innerHTML = `<p class="empty">No decisions yet.</p>${DISCLAIMER}`; return; }
-  setAsOf(decCache[0].date);
+  if (decCache[0]) setAsOf(decCache[0].date);
+
+  const pills = `<div class="pills" role="tablist">
+      ${[["all", "All teams"], ...active.map((t) => [String(t.id), shortTeam(t.name)])].map(([id, label]) =>
+        `<button class="pill${String(teamFilter) === id ? " on" : ""}" data-team="${id}" role="tab">${esc(label)}</button>`).join("")}
+    </div>`;
+  const teamLine = (id) => teamFilter === "all" ? `${esc(shortTeam(teamNames[id] || ""))} · ` : "";
+
+  const plannedHtml = !more ? `<section>
+      <p class="label">Planned · next market open</p>
+      ${planned.length ? `<ul class="rows">${planned.map((o) => `
+        <li><button class="dec-row" data-id="${o.decision_id || ""}">
+          <span class="mid">
+            <span class="co">${esc(stockName(o.ticker))}</span>
+            <span class="act">${o.side === "buy" ? "Buy" : "Sell"} ${o.shares} shares</span>
+            ${teamFilter === "all" ? `<span class="meta">${esc(shortTeam(teamNames[o.team_id] || ""))}</span>` : ""}
+            ${whenLines(o.for_date)}
+          </span>
+          <span class="chip ${o.side}">${o.side}</span>
+        </button></li>`).join("")}</ul>
+        <p class="note" style="margin-top:6px">Orders fill at the opening price. They show up under "Bought & sold" after that evening's run.</p>`
+      : `<p class="note">Nothing planned. Teams decide every weekday after the US market closes.</p>`}
+    </section>` : "";
+
+  const tradesHtml = !more ? `<section>
+      <p class="label">Bought & sold</p>
+      ${trades.length ? `<ul class="rows">${trades.map((t) => `
+        <li><div class="dec-row">
+          <span class="mid">
+            <span class="co">${esc(stockName(t.ticker))}</span>
+            <span class="act"><span class="${t.side === "buy" ? "up" : "down"}">${t.side === "buy" ? "Bought" : "Sold"}</span> ${t.shares} shares at ${money2(t.fill_price)}</span>
+            ${teamFilter === "all" ? `<span class="meta">${esc(shortTeam(teamNames[t.team_id] || ""))}</span>` : ""}
+            ${whenLines(t.executed_at)}
+          </span>
+        </div></li>`).join("")}</ul>` : `<p class="note">No trades yet.</p>`}
+    </section>` : "";
+
   const byDay = {};
   for (const d of decCache) (byDay[d.date] ||= []).push(d);
-  el.innerHTML = Object.entries(byDay).map(([date, ds]) => `
+  const decisionsHtml = `<section><p class="label">Decisions · tap one to see the debate</p></section>` +
+    (decCache.length ? Object.entries(byDay).map(([date, ds]) => `
     <section class="day-group">
-      <p class="label">${dayYear(date)}</p>
+      <p class="label sub">${dayYear(date)}</p>
       <ul class="rows">${ds.map((d) => `
         <li><button class="dec-row" data-id="${d.id}">
-          <span class="tk num">${esc(d.ticker || "—")}</span>
           <span class="mid">
-            <span class="act">${esc(d.final_action || "")}</span>
-            <span class="meta">${esc(teamNames[d.team_id] || "")}${d.judge_verdict ? ` · conviction ${num(d.judge_verdict.conviction)}` : ""}</span>
+            <span class="co">${esc(d.ticker ? stockName(d.ticker) : "Daily summary")}</span>
+            <span class="act">${esc(actionText(d.final_action || ""))}</span>
+            <span class="meta">${teamLine(d.team_id)}${d.judge_verdict ? `conviction ${num(d.judge_verdict.conviction)}` : ""}</span>
           </span>
           <span class="chip ${actionClass(d.final_action)}">${esc(chipText(d))}</span>
         </button></li>`).join("")}
       </ul>
-    </section>`).join("") + (rows.length === PAGE ? `<button class="more" id="more">Show more</button>` : "") + DISCLAIMER;
-  el.querySelectorAll(".dec-row").forEach((b) => b.addEventListener("click", () => showDecision(+b.dataset.id)));
+    </section>`).join("") : `<p class="note">No decisions yet.</p>`);
+
+  el.innerHTML = pills + plannedHtml + tradesHtml + decisionsHtml +
+    (rows.length === PAGE ? `<button class="more" id="more">Show more</button>` : "") + DISCLAIMER;
+  el.querySelectorAll(".pill").forEach((b) => b.addEventListener("click", () => {
+    teamFilter = b.dataset.team;
+    try { localStorage.setItem("arena.team", teamFilter); } catch { /* private mode */ }
+    decisions(el, setAsOf);
+  }));
+  el.querySelectorAll("button.dec-row[data-id]").forEach((b) => b.addEventListener("click", () => { if (b.dataset.id) showDecision(+b.dataset.id); }));
   el.querySelector("#more")?.addEventListener("click", () => decisions(el, setAsOf, { more: true }));
 }
 
 async function showDecision(id) {
+  await loadStockNames();
   const [d] = await q("decisions", { select: "*", id: `eq.${id}` });
+  const [order] = await q("orders", { select: "side,shares,status,for_date", decision_id: `eq.${id}` });
   const v = d.judge_verdict, r = d.risk_result;
   const text = [d.analyst_report, d.bull_case, d.bear_case, v?.reasoning, ...(v?.key_evidence || [])].join(" ");
   const ids = [...new Set([...text.matchAll(/#(\d+)/g)].map((m) => +m[1]))].slice(0, 20);
   const cards = ids.length ? await q("fact_cards", { select: "id,ticker,claim,direction,claim_type", id: inList(ids) }) : [];
   const block = (title, body) => body ? `<section class="section"><p class="label">${title}</p><p class="text">${esc(body)}</p></section>` : "";
+  const orderLine = order ? `${order.side === "buy" ? "Buy" : "Sell"} ${order.shares} shares · ${order.status === "pending" ? "planned for" : order.status} ${whenRow(order.for_date)}` : "";
   openSheet(`
-    <div class="sheet-title"><h2 class="display">${esc(d.ticker || "Summary")}</h2>
-      <span class="chip ${actionClass(d.final_action)}">${esc(d.final_action || "")}</span></div>
-    <p class="note" style="margin-top:-12px">${esc(teamNames[d.team_id] || "")} · ${dayYear(d.date)} · orders fill at the next open</p>
+    <div class="sheet-title"><h2 class="display">${esc(d.ticker ? stockName(d.ticker) : "Daily summary")}</h2>
+      <span class="chip ${actionClass(d.final_action)}">${esc(chipText(d))}</span></div>
+    <p class="note" style="margin-top:-12px">${esc(shortTeam(teamNames[d.team_id] || ""))} · decided ${dayYear(d.date)} after the close</p>
+    ${orderLine ? `<p class="card" style="margin:0;padding:12px 14px">${esc(orderLine)}</p>` : ""}
     ${v ? `<div class="verdict">
       <div><span>Judge</span><b>${esc(v.action)}</b></div>
       <div><span>Conviction</span><b>${num(v.conviction)}</b></div>
@@ -181,7 +269,7 @@ async function showDecision(id) {
     ${block("Judge", v?.reasoning)}
     ${v?.main_risk ? block("Main risk", v.main_risk) : ""}
     ${cards.length ? `<section class="section"><p class="label">Evidence</p><ul class="evidence">${cards.map((c) => `
-      <li class="text">#${c.id} ${esc(c.claim)}<small>${esc(c.ticker || "macro")} · ${esc(c.direction)} · ${esc(c.claim_type)}</small></li>`).join("")}</ul></section>` : ""}
+      <li class="text">#${c.id} ${esc(c.claim)}<small>${esc(c.ticker ? stockName(c.ticker) : "economy")} · ${esc(c.direction)} · ${esc(c.claim_type)}</small></li>`).join("")}</ul></section>` : ""}
     ${block("Analyst", d.analyst_report)}
     ${block("Bull", d.bull_case)}
     ${block("Bear", d.bear_case)}
@@ -246,6 +334,7 @@ export async function system(el, setAsOf) {
 
 // ---------- Lesson book ----------
 export async function lessons(el, setAsOf) {
+  await loadStockNames();
   const teams = await q("teams", { select: "id,name,config", status: "eq.active", order: "id.asc" });
   if (!teams.length) { el.innerHTML = `<p class="empty">No teams yet.</p>${DISCLAIMER}`; return; }
   const ids = teams.map((t) => t.id);
@@ -279,8 +368,8 @@ export async function lessons(el, setAsOf) {
       <p class="label">Recent reviews</p>
       ${reviews.length ? `<ul class="rows">${reviews.map((r) => { const t = tradeOf[r.closed_trade_id] || {}; return `
         <li><button class="dec-row pm-row" data-id="${r.id}">
-          <span class="tk num">${esc(t.ticker || "—")}</span>
-          <span class="mid"><span class="act ${tone(t.pnl_pct)}">${pct(t.pnl_pct)}</span>
+          <span class="mid"><span class="co">${esc(t.ticker ? stockName(t.ticker) : "—")}</span>
+            <span class="act ${tone(t.pnl_pct)}">${pct(t.pnl_pct)}</span>
             <span class="meta">vs SPY ${pct(t.benchmark_return)} · closed ${day(t.exit_date)}</span></span>
         </button></li>`; }).join("")}</ul>` : `<p class="note">No closed trades yet.</p>`}
     </section>
@@ -297,7 +386,7 @@ async function showReview(pmId, lesson) {
   const [t] = pm ? await q("closed_trades", { select: "*", id: `eq.${pm.closed_trade_id}` }) : [null];
   const block = (title, body) => body ? `<section class="section"><p class="label">${title}</p><p class="text">${esc(body)}</p></section>` : "";
   openSheet(`
-    <div class="sheet-title"><h2 class="display">${esc(t?.ticker || "Lesson")}</h2>
+    <div class="sheet-title"><h2 class="display">${esc(t?.ticker ? stockName(t.ticker) : "Lesson")}</h2>
       ${t ? `<span class="chip ${t.pnl_pct >= 0 ? "buy" : "sell"}">${pct(t.pnl_pct)}</span>` : ""}</div>
     ${t ? `<p class="note" style="margin-top:-12px">${day(t.entry_date)} → ${day(t.exit_date)} · ${t.holding_days} days · SPY ${pct(t.benchmark_return)}</p>` : ""}
     ${lesson ? `<div class="verdict"><div><span>Score</span><b>${num(lesson.score)}</b></div>
@@ -311,6 +400,7 @@ async function showReview(pmId, lesson) {
 
 // ---------- Source trust ----------
 export async function sources(el) {
+  await loadStockNames();
   const [rows, teams] = await Promise.all([
     q("sources", { select: "id,name,domain,trust_alpha,trust_beta,trust_score,claims_evaluated", order: "claims_evaluated.desc,trust_score.desc", limit: 300 }),
     q("teams", { select: "config", status: "eq.active" }),
@@ -348,6 +438,6 @@ async function showSource(s) {
     <p class="note" style="margin-top:-12px">${esc(s.domain)} · ${s.claims_evaluated} claim(s) judged</p>
     <section><p class="label">Recent claims</p>
       ${cards.length ? `<ul class="evidence">${cards.map((c) => `<li class="text">${esc(c.claim)}
-        <small>${esc(c.ticker || "macro")} · ${esc(c.direction)} · ${c.horizon_days}d${c.corroborated ? " · corroborated" : ""}${ev[c.id]?.excess_return != null ? ` · vs SPY ${pct(ev[c.id].excess_return)}` : ""} ${badge(ev[c.id])}</small></li>`).join("")}</ul>` : `<p class="note">No claims yet.</p>`}
+        <small>${esc(c.ticker ? stockName(c.ticker) : "economy")} · ${esc(c.direction)} · ${c.horizon_days}d${c.corroborated ? " · corroborated" : ""}${ev[c.id]?.excess_return != null ? ` · vs SPY ${pct(ev[c.id].excess_return)}` : ""} ${badge(ev[c.id])}</small></li>`).join("")}</ul>` : `<p class="note">No claims yet.</p>`}
     </section>`);
 }

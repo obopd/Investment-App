@@ -193,3 +193,14 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .src-row .trust { width: 34px; text-align: right; font-size: 14px; }
 .src-row:active { opacity: .6; }
 .evidence small .chip { margin-left: 4px; padding: 1px 6px; font-size: 10px; }
+
+/* ---------- Team pills + company rows ---------- */
+.pills { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -18px; padding: 0 18px; }
+.pills::-webkit-scrollbar { display: none; }
+.pill { flex-shrink: 0; padding: 7px 14px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: 13px; }
+.pill.on { background: var(--fg); color: var(--bg); }
+.pill:active { transform: scale(.96); }
+.dec-row .co { font-family: var(--display); font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.label.sub { margin-bottom: 2px; }
+div.dec-row:active { opacity: 1; }
+.dec-row .when { font-size: 11.5px; color: var(--muted); }
