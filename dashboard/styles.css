@@ -210,3 +210,11 @@ div.dec-row:active { opacity: 1; }
 .view-box.view-enter > * { animation: view-in .22s var(--ease); }
 
 @media (prefers-reduced-motion: reduce) { .view-box.view-enter > * { animation: none; } }
+
+/* ---------- Currency button ---------- */
+.cur-btn { min-width: 36px; height: 36px; padding: 0 10px; border-radius: 18px; background: var(--soft); color: var(--fg);
+  font-family: var(--display); font-weight: 600; font-size: 15px; align-self: center; }
+.cur-btn:active { transform: scale(.92); }
+.cur-btn.shake { animation: shake .4s; }
+@keyframes shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+.note a { color: inherit; }

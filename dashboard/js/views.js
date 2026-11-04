@@ -1,6 +1,6 @@
 import { q, qAll, inList } from "./api.js";
 import { lineChart } from "./chart.js";
-import { ago, day, dayYear, esc, localTime, marketOpen, money, money2, num, nyTime, pct, tone } from "./format.js";
+import { ago, day, dayYear, display, esc, localTime, marketOpen, money, money2, num, nyTime, pct, tone } from "./format.js";
 import { openSheet } from "./sheet.js";
 
 // Full company names instead of tickers (e.g. "Walmart", not "WMT").
@@ -316,6 +316,10 @@ export async function system(el, setAsOf) {
       <ul class="rows">${runs.map((r) => `<li><button class="run-row" data-id="${r.id}">
         <span class="dot ${esc(r.status)}"></span><span class="when">${dayYear(r.run_date)}${r.dry_run ? " · test" : ""}</span>
         <span class="muted">${esc(r.status)}</span></button></li>`).join("")}</ul>
+    </section>
+    <section class="section">
+      <p class="label">Currency</p>
+      <p class="note">The simulation runs in US dollars. Tap the currency button at the top to show amounts in ${display.code === "USD" ? "your local currency" : display.code}${display.code !== "USD" ? ` (1 USD = ${display.rate.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${display.code})` : ""}. Rates update daily: <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener">Rates by Exchange Rate API</a>. Text written by the AI still says $.</p>
     </section>
     <section class="section">
       <p class="label">Limits of this experiment</p>

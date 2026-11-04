@@ -1,5 +1,6 @@
 import { clearCache, configured } from "./api.js";
-import { day } from "./format.js";
+import { day, display } from "./format.js";
+import { localCurrency, saveChoice, savedChoice, usdRate } from "./fx.js";
 import * as views from "./views.js";
 
 const view = document.getElementById("view");
@@ -46,6 +47,32 @@ function prefetch() {
   }));
 }
 
+// ---------- Currency button: $ <-> local currency ----------
+const curBtn = document.getElementById("currency");
+const LOCAL = localCurrency();
+const symbol = (code) => new Intl.NumberFormat("en-US", { style: "currency", currency: code, currencyDisplay: "narrowSymbol" })
+  .formatToParts(0).find((p) => p.type === "currency")?.value || code;
+
+async function setCurrency(code, { redraw = true } = {}) {
+  if (code === "USD") {
+    Object.assign(display, { code: "USD", rate: 1 });
+  } else {
+    const fx = await usdRate(code);
+    if (!fx) {   // no rate available: stay in dollars and say so briefly
+      curBtn.classList.add("shake");
+      setTimeout(() => curBtn.classList.remove("shake"), 500);
+      asof.textContent = "exchange rate unavailable";
+      return;
+    }
+    Object.assign(display, { code, rate: fx.rate, at: fx.at });
+  }
+  curBtn.textContent = symbol(display.code);
+  curBtn.setAttribute("aria-label", `Showing ${display.code}. Tap to switch to ${display.code === "USD" ? LOCAL : "USD"}`);
+  saveChoice(display.code);
+  if (redraw) show(location.hash.slice(1), { animate: false });
+}
+curBtn.addEventListener("click", () => setCurrency(display.code === "USD" ? LOCAL : "USD"));
+
 let hiddenAt = 0;
 tabs.forEach((t) => t.addEventListener("click", () => { window.scrollTo(0, 0); show(t.dataset.tab); }));
 refresh.addEventListener("click", () => { clearCache(); show(location.hash.slice(1), { animate: false }); });
@@ -54,6 +81,7 @@ document.addEventListener("visibilitychange", () => {
   if (Date.now() - hiddenAt > 60_000) { clearCache(); show(location.hash.slice(1), { animate: false }); }
 });
 window.addEventListener("hashchange", () => show(location.hash.slice(1)));
-show(location.hash.slice(1)).then(prefetch);
+const startCurrency = savedChoice() === "USD" ? Promise.resolve() : setCurrency(LOCAL, { redraw: false });
+startCurrency.finally(() => show(location.hash.slice(1)).then(prefetch));
 
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
