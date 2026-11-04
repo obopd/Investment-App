@@ -1,4 +1,12 @@
-export const money = (x) => x == null ? "–" : "$" + Math.round(x).toLocaleString("en-US");
+// Money is stored in US dollars; `display` decides how it is shown (see fx.js).
+export const display = { code: "USD", rate: 1 };
+const fmtMoney = (x, digits) => new Intl.NumberFormat("en-US", {
+  style: "currency", currency: display.code, currencyDisplay: "narrowSymbol",
+  minimumFractionDigits: digits, maximumFractionDigits: digits,
+}).format(x * display.rate);
+// Currencies like the won have no cents.
+const cents = () => (["KRW", "JPY", "TWD"].includes(display.code) ? 0 : 2);
+export const money = (x) => x == null ? "–" : fmtMoney(x, 0);
 export const pct = (x, digits = 1) => x == null ? "–" : (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x * 100).toFixed(digits) + "%";
 export const num = (x, digits = 2) => x == null ? "–" : x.toFixed(digits);
 export const tone = (x) => x > 0 ? "up" : x < 0 ? "down" : "";
@@ -16,7 +24,7 @@ export const ago = (iso) => {
   return `${Math.round(s / 86400)} days ago`;
 };
 
-export const money2 = (x) => x == null ? "–" : "$" + x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const money2 = (x) => x == null ? "–" : fmtMoney(x, cents());
 
 // The US market opens at 9:30am New York time. Find that moment for a date, daylight saving included.
 export function marketOpen(iso) {

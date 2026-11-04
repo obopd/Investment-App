@@ -1,8 +1,8 @@
 // Bump CACHE whenever a file in ASSETS changes, so installed copies update.
-const CACHE = "arena-v8";
+const CACHE = "arena-v9";
 const ASSETS = [
   "./", "index.html", "styles.css", "manifest.webmanifest", "config.js",
-  "js/app.js", "js/api.js", "js/views.js", "js/chart.js", "js/format.js", "js/sheet.js",
+  "js/app.js", "js/api.js", "js/views.js", "js/chart.js", "js/format.js", "js/sheet.js", "js/fx.js",
   "fonts/fraunces-latin-wght-normal.woff2", "icons/icon.svg", "icons/icon-180.png",
 ];
 

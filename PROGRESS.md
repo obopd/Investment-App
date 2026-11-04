@@ -63,6 +63,8 @@
 - Teams renamed to **A** (short-term price trends, was Momentum), **B** (news, was Newshound), **C** (long-term, was Steady); no "(practice)" suffix. Teams keep their history: `config/teams.yaml` has a stable `key` and `formerly` names. Evolved children are named A2, A3...
 - Dashboard tab switches are instant: answers are cached for a minute, other tabs are pre-loaded in the background, and a slow earlier load can't overwrite a newer tab.
 
+- Currency button in the dashboard header: shows money in US dollars or the viewer's local currency (from the phone's time zone, e.g. ₩ in Korea). Daily rates from ExchangeRate-API's free feed (attributed on the System page), cached 12 h, with a backup source. Display only: the simulation stays in US dollars; AI-written text still says $.
+
 ## Next
 All six phases are built. Remaining: switch to live AI when ready (see docs/SETUP.md section 7), then let it run for months before judging results.
 
