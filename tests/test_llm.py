@@ -101,3 +101,30 @@ def test_anthropic_request_uses_structured_output_and_effort():
     assert text == '{"ok": true}' and (tin, tout, stop) == (10, 5, "end_turn")
     assert sent["output_config"] == {"effort": "low", "format": {"type": "json_schema", "schema": {"type": "object"}}}
     assert sent["messages"] == [{"role": "user", "content": "p"}] and sent["system"] == "s"
+
+
+def test_provider_error_stops_ai_for_the_run_and_nothing_is_marked_done():
+    from arena.facts.extract import extract_fact_cards
+    from arena.llm.budget import AIUnavailable
+    from arena.llm.providers import ProviderError
+
+    class NoCredit:
+        name = "anthropic"
+        calls = 0
+
+        def complete(self, **kw):
+            NoCredit.calls += 1
+            raise ProviderError("BadRequestError: Your credit balance is too low")
+    db = MemoryDB()
+    now = datetime(2026, 11, 4, 12, tzinfo=timezone.utc)
+    db.insert("sources", [{"id": 1, "name": "W", "domain": "w.com"}])
+    db.insert("articles", [{"id": i, "source_id": 1, "url": f"u{i}", "title": f"Apple news {i}", "tickers": ["AAPL"],
+                            "published_at": "2026-11-04T10:00:00+00:00"} for i in range(25)])
+    llm = client(NoCredit(), db=db)
+    s = extract_fact_cards(db, llm, {"AAPL"}, config.load("facts"), now)
+    assert s["skipped_budget"] and s["articles_processed"] == 0
+    assert NoCredit.calls == 1                       # stopped after the first failure
+    assert not any(a.get("facts_extracted_at") for a in db.select("articles"))   # retried next run
+    assert llm.available is False
+    with pytest.raises(AIUnavailable):
+        llm.json("judge", "s", "p", {}, positive)

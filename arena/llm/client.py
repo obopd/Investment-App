@@ -4,7 +4,7 @@ import json
 import re
 from typing import Any, Callable
 
-from arena.llm.budget import BudgetExceeded, BudgetGuard
+from arena.llm.budget import AIUnavailable, BudgetExceeded, BudgetGuard
 from arena.llm.providers import MockProvider, ProviderError
 
 CHARS_PER_TOKEN = 3.5  # rough and slightly pessimistic, used only for the budget estimate
@@ -29,10 +29,11 @@ class LLMClient:
         self.providers, self.practice = providers, practice
         self.failures: list[dict] = []
         self.calls = 0
+        self.down: str | None = None   # set after a provider error; no more calls this run
 
     @property
     def available(self) -> bool:
-        return self.practice or bool(self.providers)
+        return self.practice or (bool(self.providers) and not self.down)
 
     def _model(self, role: str, model_key: str | None = None) -> dict:
         """model_key (a team's choice for this role) overrides the default in models.yaml."""
@@ -43,6 +44,8 @@ class LLMClient:
 
     def _call(self, role, system, prompt, max_tokens, schema, mock, model_key=None):
         m = self._model(role, model_key)
+        if self.down:
+            raise AIUnavailable(self.down)
         if self.practice:
             provider = MockProvider()
             text, tin, tout, stop = provider.complete(model=m["model"], system=system, prompt=prompt,
@@ -82,8 +85,7 @@ class LLMClient:
             except BudgetExceeded:
                 raise
             except ProviderError as e:
-                self.failures.append({"role": role, "error": str(e)})
-                return None
+                return self._provider_down(role, e)
             except (InvalidOutput, ValueError, TypeError, KeyError) as e:
                 if attempt == 2:
                     self.failures.append({"role": role, "error": f"invalid output twice: {str(e)[:200]}"})
@@ -99,9 +101,18 @@ class LLMClient:
             return out or None
         except BudgetExceeded:
             raise
-        except (ProviderError, InvalidOutput) as e:
+        except ProviderError as e:
+            return self._provider_down(role, e)
+        except InvalidOutput as e:
             self.failures.append({"role": role, "error": str(e)})
             return None
+
+    def _provider_down(self, role, e):
+        """A provider error (no credit, bad key, outage) is not the model's fault: stop all AI
+        calls for this run and let the caller retry the same work on the next run."""
+        self.failures.append({"role": role, "error": str(e)})
+        self.down = f"AI provider unavailable: {str(e)[:200]}"
+        raise AIUnavailable(self.down)
 
 
 def make_llm(db, run_id, models_cfg: dict, guard: BudgetGuard, dry_run: bool) -> LLMClient:

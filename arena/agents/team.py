@@ -8,7 +8,7 @@ from arena import config
 from arena.agents import prompts
 from arena.agents.inputs import build_inputs
 from arena.lookahead import LookAheadError
-from arena.llm.budget import BudgetExceeded
+from arena.llm.budget import AIUnavailable, BudgetExceeded
 from arena.risk.engine import evaluate, stop_loss_sells
 from arena.sim.executor import next_order_date
 
@@ -277,7 +277,9 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
                     # Reserve the cash so later buys today are sized against what's left.
                     pf.cash -= risk.shares * closes[c.ticker] * (1 + risk_cfg["slippage_pct"]) * (1 + risk_cfg["fee_pct"])
     except BudgetExceeded as e:
-        record(None, "skipped: AI budget cap reached", analyst_report=str(e))
-        summary["skipped"] = "budget"
+        unavailable = isinstance(e, AIUnavailable)
+        record(None, "skipped: AI unavailable" if unavailable else "skipped: AI budget cap reached",
+               analyst_report=str(e))
+        summary["skipped"] = "ai unavailable" if unavailable else "budget"
     return summary
 
