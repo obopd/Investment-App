@@ -65,6 +65,8 @@
 
 - Currency button in the dashboard header: shows money in US dollars or the viewer's local currency (from the phone's time zone, e.g. ₩ in Korea). Daily rates from ExchangeRate-API's free feed (attributed on the System page), cached 12 h, with a backup source. Display only: the simulation stays in US dollars; AI-written text still says $.
 
+- **Went live 2026-11-04**: `mode: live`, monthly AI cap $8 (owner bought $10 of API credit). Practice teams retired; fresh live teams A, B, C start with $100k each.
+
 ## Next
 All six phases are built. Remaining: switch to live AI when ready (see docs/SETUP.md section 7), then let it run for months before judging results.
 

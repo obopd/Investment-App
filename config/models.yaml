@@ -5,7 +5,7 @@
 #               decisions are placeholders. The dashboard shows a "Practice mode" label.
 #   live     -> real AI calls (needs ANTHROPIC_API_KEY in GitHub Secrets). Switching to live
 #               retires practice teams and starts fresh teams with fresh imaginary money.
-mode: practice
+mode: live
 
 providers:
   anthropic:
