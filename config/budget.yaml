@@ -1,4 +1,4 @@
 # Hard caps in USD. Before every AI call the guard assumes the worst case (max output) and
 # skips the call if either cap could be exceeded. Non-AI steps keep running.
-monthly_cap_usd: 5.00
+monthly_cap_usd: 8.00
 per_run_cap_usd: 0.50
