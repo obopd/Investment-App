@@ -23,7 +23,7 @@
 - Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
 - Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
 - Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
-- 108 tests passing, including a multi-day simulation.
+- 109 tests passing, including a multi-day simulation.
 - Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
 
 ## Done — Phase 3 (post-mortems and lesson book)
@@ -55,6 +55,10 @@
 - Walk-forward evaluation from 2008: each month trains only on data whose outcome was known before that month (20-day purge gap), never shuffled. Compared with naive baselines (no skill, 60-day momentum). Honest verdict in `docs/quant_report.md`.
 - Monthly retraining workflow ("Quant model", 1st of the month) commits `models/quant_model.json` and the report.
 - The Analyst sees each stock's quant rank and predicted 20-day excess return as a minor hint; the model never trades by itself. No model file = no scores.
+
+## Done — after Phase 6 (owner requests)
+- Dashboard shows full company names everywhere instead of tickers; AI prompts ask for full names in written text.
+- Decisions tab: team buttons (All / each team), "Planned" orders with the expected time (next market open, 9:30am New York, also in the viewer's own time zone), "Bought & sold" with shares, price and time, then the decision list.
 
 ## Next
 All six phases are built. Remaining: switch to live AI when ready (see docs/SETUP.md section 7), then let it run for months before judging results.

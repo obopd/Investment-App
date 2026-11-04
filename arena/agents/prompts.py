@@ -5,7 +5,9 @@ COMMON = (
     "free public information. It is research, not investment advice. Use only the data given "
     "to you; never rely on what you may remember about prices or events after the date shown. "
     "Fact cards are labelled with source trust (0-1, 0.5 = unknown) and source count; treat "
-    "low-trust, single-source claims with suspicion. Doing nothing (hold) is often right."
+    "low-trust, single-source claims with suspicion. Doing nothing (hold) is often right. "
+    "In written text, call companies by their full name (e.g. 'Walmart'), not their ticker; "
+    "tickers are only for the JSON fields."
 )
 
 ANALYST = COMMON + (

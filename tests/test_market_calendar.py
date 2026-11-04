@@ -31,3 +31,8 @@ def test_next_and_previous_trading_day_skip_holidays_and_weekends():
     assert next_trading_day(date(2026, 11, 25)) == date(2026, 11, 27)
     assert next_trading_day(date(2026, 11, 6)) == date(2026, 11, 9)
     assert previous_trading_day(date(2026, 1, 2)) == date(2025, 12, 31)
+
+
+def test_full_company_names_for_display():
+    from arena.config import stock_name
+    assert stock_name("WMT") == "Walmart" and stock_name("LLY") == "Eli Lilly" and stock_name("XYZ") == "XYZ"

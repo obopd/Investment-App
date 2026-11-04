@@ -14,6 +14,14 @@ def load(name: str) -> dict:
         return yaml.safe_load(f) or {}
 
 
+def stock_name(ticker: str) -> str:
+    """Full company name for display text (e.g. 'WMT' -> 'Walmart')."""
+    for s in load("universe")["stocks"]:
+        if s["ticker"] == ticker:
+            return s["name"]
+    return ticker
+
+
 def universe_tickers(include_benchmark: bool = True) -> list[str]:
     u = load("universe")
     tickers = [s["ticker"] for s in u["stocks"]]

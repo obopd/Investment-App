@@ -63,7 +63,8 @@ def mock_review(trade: dict) -> dict:
         lesson = "[practice] When a strong 20-day trend is confirmed by rising volume, give the position at least two weeks."
     else:
         lesson = "[practice] When a stock's 5-day return turns negative right after entry, wait for the trend to resume before adding."
-    return {"what_happened": f"[practice] {trade['ticker']} returned {trade['pnl_pct']:+.1%} over {trade['holding_days']} days.",
+    from arena.config import stock_name
+    return {"what_happened": f"[practice] {stock_name(trade['ticker'])} returned {trade['pnl_pct']:+.1%} over {trade['holding_days']} days.",
             "right_or_wrong": "[practice] Placeholder review; no real AI was used.",
             "what_was_missed": "[practice] Nothing assessed in practice mode.",
             "lesson": lesson}
