@@ -204,3 +204,9 @@ svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width:
 .label.sub { margin-bottom: 2px; }
 div.dec-row:active { opacity: 1; }
 .dec-row .when { font-size: 11.5px; color: var(--muted); }
+
+/* Each page is drawn into one box; it joins the view's grid as if it weren't there. */
+.view-box { display: contents; }
+.view-box.view-enter > * { animation: view-in .22s var(--ease); }
+
+@media (prefers-reduced-motion: reduce) { .view-box.view-enter > * { animation: none; } }

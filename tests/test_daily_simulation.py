@@ -57,7 +57,7 @@ def test_orders_fill_at_next_open_with_costs_and_equity_tracks(world):
         assert t["fees"] == pytest.approx(t["shares"] * t["fill_price"] * risk["fee_pct"])
 
     team = db.select("teams")[0]
-    assert team["name"] == "Momentum (practice)"
+    assert team["name"] == "A" and team["config"]["mode"] == "practice"
     eq = db.select("equity_daily", {"team_id": team["id"]}, order="date.asc")
     assert [r["date"] for r in eq] == [DAYS[0].isoformat(), DAYS[1].isoformat()]
     assert eq[0]["total_equity"] == risk["starting_cash"]
@@ -102,8 +102,10 @@ def test_going_live_retires_practice_team(world, monkeypatch):
     now = datetime.combine(DAYS[1], time(23, 30), timezone.utc)
     result = pipeline.run(DAYS[1], db, dry_run=False, session=FakeSession({}), price_provider=prices, now=now)
     teams = {t["name"]: t["status"] for t in db.select("teams")}
-    founders = [t["name"] for t in config.load("teams")["teams"]]
-    assert teams == {**{f"{n} (practice)": "retired" for n in founders}, **{n: "active" for n in founders}}
+    rows = db.select("teams", order="id.asc")
+    assert [(t["name"], t["status"], t["config"]["mode"]) for t in rows] == [
+        ("A", "retired", "practice"), ("B", "retired", "practice"), ("C", "retired", "practice"),
+        ("A", "active", "live"), ("B", "active", "live"), ("C", "active", "live")]
     for t in db.select("teams", {"status": "retired"}):
         assert all(o["status"] != "pending" for o in db.select("orders", {"team_id": t["id"]}))
     assert result["summary"]["ai"]["available"] is False       # no key: AI skipped, data still collected

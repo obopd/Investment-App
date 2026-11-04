@@ -67,15 +67,22 @@ def seed_teams(db, run_date: date, mode: str, starting_cash: float) -> list[dict
     mine = [t for t in db.select("teams", order="id.asc") if (t.get("config") or {}).get("mode") == mode]
     fresh_start = not any(t["status"] == "active" for t in mine)
     for cfg in founders:
-        name = cfg["name"] + (" (practice)" if mode == "practice" else "")
-        want = {**cfg, "mode": mode}
-        same = [t for t in mine if t["name"] == name and (t.get("generation") or 0) == 0]
+        want = {k: v for k, v in cfg.items() if k != "formerly"} | {"mode": mode}
+        # A founder is recognised by its key, or by its current/old name (with or without the
+        # old " (practice)" suffix), so renaming a team in teams.yaml keeps its history.
+        names = {cfg["name"], *cfg.get("formerly", [])}
+        names |= {n + " (practice)" for n in names}
+
+        def is_this(t):
+            c = t.get("config") or {}
+            return (t.get("generation") or 0) == 0 and (c.get("key") == cfg.get("key") or t["name"] in names)
+        same = [t for t in mine if is_this(t)]
         active = [t for t in same if t["status"] == "active"]
         if active:
-            if active[0]["config"] != want:   # config edits apply from the next run
-                db.update("teams", {"id": active[0]["id"]}, {"config": want})
+            if active[0]["config"] != want or active[0]["name"] != cfg["name"]:   # edits apply from the next run
+                db.update("teams", {"id": active[0]["id"]}, {"config": want, "name": cfg["name"]})
         elif fresh_start or not same:
-            team = db.insert("teams", [{"name": name, "generation": 0, "config": want, "status": "active"}],
+            team = db.insert("teams", [{"name": cfg["name"], "generation": 0, "config": want, "status": "active"}],
                              returning=True)[0]
             db.insert("portfolios", [{"team_id": team["id"], "cash": starting_cash,
                                       "peak_equity": starting_cash, "start_date": run_date}])

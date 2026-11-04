@@ -30,6 +30,7 @@ def test_mutation_changes_one_or_two_settings_within_bounds():
         assert 0 <= child["news_weight"] <= 1 and 1 <= child["max_candidates_per_day"] <= 5
         assert child["models"] == parent["models"]
     assert base_name("Momentum g2 (practice)") == "Momentum" and base_name("Steady") == "Steady"
+    assert base_name("A3") == "A" and base_name("A") == "A"
 
 
 def test_excess_sharpe_rewards_beating_spy():
@@ -69,8 +70,8 @@ def world(days=70, trades=12, mode="live"):
 def test_worst_retires_and_best_spawns_a_mutated_child_with_lineage():
     db = world()
     res = maybe_evolve(db, RUN, "live", CFG, 100_000, NOW)
-    assert res["retired"] == "Newshound" and res["parent"] == "Momentum" and res["child"] == "Momentum g1"
-    child = db.select("teams", {"name": "Momentum g1"})[0]
+    assert res["retired"] == "Newshound" and res["parent"] == "Momentum" and res["child"] == "Momentum2"
+    child = db.select("teams", {"name": "Momentum2"})[0]
     assert child["parent_team_id"] == 1 and child["generation"] == 1 and child["mutation"]
     assert child["config"]["mode"] == "live"
     assert db.select("teams", {"id": 2})[0]["status"] == "retired"
@@ -95,10 +96,22 @@ def test_safeguards(kwargs, run, mode, reason):
 def test_three_founding_teams_are_seeded_and_evolved_children_are_kept():
     db = MemoryDB()
     teams = pipeline.seed_teams(db, RUN, "live", 100_000)
-    assert [t["name"] for t in teams] == ["Momentum", "Newshound", "Steady"]
-    # Evolution retired Newshound and added a child: the founder must not come back.
-    nh = next(t for t in teams if t["name"] == "Newshound")
-    db.update("teams", {"id": nh["id"]}, {"status": "retired"})
-    db.insert("teams", [{"name": "Momentum g1", "generation": 1, "status": "active", "config": {"mode": "live"}}])
+    assert [t["name"] for t in teams] == ["A", "B", "C"]
+    # Evolution retired B and added a child: the founder must not come back.
+    b = next(t for t in teams if t["name"] == "B")
+    db.update("teams", {"id": b["id"]}, {"status": "retired"})
+    db.insert("teams", [{"name": "A2", "generation": 1, "status": "active", "config": {"mode": "live"}}])
     again = pipeline.seed_teams(db, RUN, "live", 100_000)
-    assert sorted(t["name"] for t in again) == ["Momentum", "Momentum g1", "Steady"]
+    assert sorted(t["name"] for t in again) == ["A", "A2", "C"]
+
+
+def test_renaming_keeps_the_same_team_and_its_money():
+    db = MemoryDB()
+    # As created before the rename: old names with the practice suffix, no key.
+    for n in ["Momentum", "Newshound", "Steady"]:
+        t = db.insert("teams", [{"name": f"{n} (practice)", "generation": 0, "status": "active",
+                                 "config": {"mode": "practice"}}], returning=True)[0]
+        db.insert("portfolios", [{"team_id": t["id"], "cash": 123.0}])
+    teams = pipeline.seed_teams(db, RUN, "practice", 100_000)
+    assert [(t["name"], t["config"]["key"]) for t in teams] == [("A", "trend"), ("B", "news"), ("C", "steady")]
+    assert len(db.select("teams")) == 3 and all(p["cash"] == 123.0 for p in db.select("portfolios"))
