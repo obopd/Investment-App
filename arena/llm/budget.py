@@ -6,6 +6,11 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+class AIUnavailable(BudgetExceeded):
+    """The provider refused service (no credit, bad key, outage). Callers stop making AI calls
+    for this run exactly as for the budget cap, and nothing is marked as processed."""
+
+
 def month_start(now: datetime) -> datetime:
     return datetime(now.year, now.month, 1, tzinfo=timezone.utc)
 
