@@ -31,6 +31,7 @@ from arena.trust.scoring import corroborate, evaluate_claims
 from arena.http import make_session
 from arena.llm.budget import BudgetGuard
 from arena.llm.client import make_llm
+from arena.llm.credit import credit_status
 from arena.lookahead import NEW_YORK, decision_cutoff
 from arena.market_calendar import is_trading_day
 from arena.sim import executor
@@ -216,6 +217,11 @@ def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
                      "failures": llm.failures[:10], **guard.summary()}
     if llm.failures:
         errors["ai"] = f"{len(llm.failures)} AI call(s) failed validation or errored"
+    if mode == "live":
+        try:
+            summary["credit"] = credit_status(db, config.load("budget"), run_date, llm.failures)
+        except Exception as e:   # the countdown is informational; never fail a run over it
+            errors["credit"] = f"{type(e).__name__}: {e}"[:200]
 
     collection_steps = [s for s in ("prices", "news", "filings") if s in summary]
     hard_failures = [s for s in collection_steps if summary.get(s, {}).get("failed")]
@@ -244,6 +250,14 @@ def main(argv=None) -> int:
     db = MemoryDB() if args.dry_run else SupabaseDB.from_env()
     result = run(run_date, db, dry_run=args.dry_run, force=args.force, skip_collect=args.skip_collect)
     print(json.dumps({"date": run_date.isoformat(), **result}, indent=2, default=str))
+    credit = result.get("summary", {}).get("credit") or {}
+    if credit.get("out_of_credit"):
+        # A red X on the workflow makes GitHub email the owner: the only push alert we have.
+        print("::error::The AI credit has run out. Add funds in the Claude Console (Billing), then update "
+              "credit_usd and credit_added_on in config/budget.yaml. Data collection still ran.")
+        return 1
+    if credit.get("low"):
+        print(f"::warning::AI credit is low: about ${credit['left_usd']:.2f} left.")
     return 1 if result["status"] == "failed" else 0
 
 

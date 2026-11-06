@@ -14,6 +14,16 @@ async function loadStockNames() {
 }
 const stockName = (t) => (stockNames && stockNames[t]) || t;
 
+// Warning shown at the top of the leaderboard when the prepaid AI credit is low or gone.
+async function creditBanner() {
+  const [run] = await q("runs", { select: "summary->credit", status: "neq.skipped", order: "id.desc", limit: 1 });
+  const c = run?.credit;
+  if (!c || !c.low) return "";
+  return c.out_of_credit
+    ? `<p class="banner bad">AI credit has run out. Teams are paused until you add funds in the Claude Console (Billing).</p>`
+    : `<p class="banner">AI credit is low: about $${c.left_usd.toFixed(2)} left. Add funds in the Claude Console (Billing).</p>`;
+}
+
 const DISCLAIMER = `<p class="note disclaimer">Experimental simulation with imaginary money. Not investment advice.</p>`;
 
 // ---------- Leaderboard ----------
@@ -23,12 +33,13 @@ export async function leaderboard(el, setAsOf) {
     q("teams", { select: "id,name,config,status,generation,parent_team_id,mutation,created_at,retired_at", order: "id.asc" }),
   ]);
   allTeams = teams;
+  const banner = await creditBanner().catch(() => "");
   const active = teams.filter((t) => t.status === "active");
   const teamRows = rows.filter((r) => !r.is_benchmark && active.some((t) => t.id === r.team_id))
     .sort((a, b) => (b.total_return ?? -1) - (a.total_return ?? -1));
   const spy = rows.find((r) => r.is_benchmark);
   if (!teamRows.length) {
-    el.innerHTML = `<p class="empty">No results yet. The first evening run creates the teams.</p>${DISCLAIMER}`;
+    el.innerHTML = `${banner}<p class="empty">No results yet. The first evening run creates the teams.</p>${DISCLAIMER}`;
     return;
   }
   setAsOf(teamRows[0].as_of);
@@ -58,6 +69,7 @@ export async function leaderboard(el, setAsOf) {
       </span>
     </li>`;
   el.innerHTML = `
+    ${banner}
     ${practice ? `<p class="chip" style="justify-self:start">Practice mode · placeholder decisions, no real AI</p>` : ""}
     <section class="hero">
       <p class="label">${esc(top.name)}</p>
@@ -302,6 +314,14 @@ export async function system(el, setAsOf) {
       <p class="note" style="margin-top:8px">Mode: ${esc(ai.mode)}${ai.mode === "practice" ? " (fake AI answers, $0)" : ""}${ai.available === false ? " · AI off (no key)" : ""}${ai.skipped_calls ? ` · ${ai.skipped_calls} call(s) skipped by the cap` : ""}</p>`
       : `<p class="muted" style="margin:0">No AI used yet.</p>`}
     </section>
+    ${s.credit ? `<section>
+      <p class="label">AI credit left (estimate)</p>
+      <span class="num" style="font-size:28px">$${s.credit.left_usd.toFixed(2)}</span><span class="muted"> of $${s.credit.credit_usd.toFixed(2)} added ${day(s.credit.since)}</span>
+      <div class="meter"><i style="transform:scaleX(${Math.min(s.credit.left_usd / s.credit.credit_usd, 1)})"></i></div>
+      <p class="note" style="margin-top:8px">${s.credit.out_of_credit ? "Ran out: add funds in the Claude Console (Billing)." :
+        s.credit.runs_out_around ? `At the current pace it runs out around ${dayYear(s.credit.runs_out_around)}.` : "The runs-out date appears after the first AI spend."}
+        Counted from this app's logged costs; the exact balance is in the Claude Console.</p>
+    </section>` : ""}
     <section>
       <p class="label">Last run</p>
       ${kv("Price rows", s.prices?.rows ?? "–")}

@@ -2,3 +2,10 @@
 # skips the call if either cap could be exceeded. Non-AI steps keep running.
 monthly_cap_usd: 8.00
 per_run_cap_usd: 0.50
+
+# Prepaid API credit (Claude Console -> Billing). The app can't read the real balance, so it
+# counts down from here using the logged cost of every AI call since `credit_added_on`.
+# When you add funds: set credit_usd to the new balance shown in the Console and today's date.
+credit_usd: 10.00
+credit_added_on: "2026-11-06"
+low_credit_warning_usd: 2.00

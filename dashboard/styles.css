@@ -218,3 +218,8 @@ div.dec-row:active { opacity: 1; }
 .cur-btn.shake { animation: shake .4s; }
 @keyframes shake { 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
 .note a { color: inherit; }
+
+/* ---------- Credit banner ---------- */
+.banner { margin: 0; padding: 12px 14px; border-radius: 14px; font-size: 13px;
+  background: color-mix(in srgb, #d99a2b 16%, transparent); color: var(--fg); }
+.banner.bad { background: color-mix(in srgb, var(--down) 16%, transparent); }
