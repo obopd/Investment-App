@@ -23,7 +23,7 @@
 - Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
 - Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
 - Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
-- 110 tests passing, including a multi-day simulation.
+- 113 tests passing, including a multi-day simulation.
 - Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
 
 ## Done — Phase 3 (post-mortems and lesson book)
@@ -66,6 +66,9 @@
 - Currency button in the dashboard header: shows money in US dollars or the viewer's local currency (from the phone's time zone, e.g. ₩ in Korea). Daily rates from ExchangeRate-API's free feed (attributed on the System page), cached 12 h, with a backup source. Display only: the simulation stays in US dollars; AI-written text still says $.
 
 - **Went live 2026-11-04**: `mode: live`, monthly AI cap $8 (owner bought $10 of API credit). Practice teams retired; fresh live teams A, B, C start with $100k each.
+
+- API credit countdown: `config/budget.yaml` holds the prepaid amount and date; each live run estimates what's left from logged costs and a runs-out date. System tab shows it, the leaderboard shows a banner below $2, and a run that hits "credit balance is too low" exits red so GitHub emails the owner. AI check workflow added for testing the key.
+- 2026-11-06: first $10 went to Claude app usage credits by mistake (not usable by the API); owner then bought $10 in the Console. AI check passed.
 
 ## Next
 All six phases are built. Remaining: switch to live AI when ready (see docs/SETUP.md section 7), then let it run for months before judging results.

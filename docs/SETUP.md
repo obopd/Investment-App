@@ -60,6 +60,12 @@ Repo → **Actions** → **Daily pipeline** → **Run workflow** → Run.
    The default cap in `config/budget.yaml` is $5/month, so raise `monthly_cap_usd` (e.g. to 10)
    or the AI steps will pause near the end of each month (data collection continues).
 
+### When you add more API credit later
+Update two lines in `config/budget.yaml` (or tell Claude the new amount): `credit_usd` = the new
+balance shown in the Console, `credit_added_on` = today's date. The System tab counts down from it,
+the leaderboard shows a banner below $2, and the evening run turns red (GitHub emails you) if the
+credit has run out.
+
 ## 8. Monthly jobs (automatic)
 - **Quant model** retrains on the 1st of each month and updates `docs/quant_report.md`.
 - **Evolution** runs on the first trading day of each month, only in live mode and only after
