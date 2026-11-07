@@ -34,21 +34,24 @@ def price_summary(rows: list[dict]) -> dict | None:
     }
 
 
-def card_trust(db, card_ids: list[int]) -> dict[int, dict]:
-    """Highest trust among the sources that made each claim, and how many sources made it."""
+def card_trust(db, card_ids: list[int], rated_after: int = 3) -> dict[int, dict]:
+    """Per claim: highest trust among its sources, how many sources made it, and whether any of
+    them is still unrated (fewer than `rated_after` judged claims, so 0.50 means "unknown")."""
     if not card_ids:
         return {}
     links = db.select("fact_card_sources", {"fact_card_id": ("in", card_ids)},
                       columns="fact_card_id,source_id", order="fact_card_id.asc,article_id.asc")
-    sources = {s["id"]: s for s in db.select("sources", columns="id,name,trust_score")}
+    sources = {s["id"]: s for s in db.select("sources", columns="id,name,trust_score,claims_evaluated")}
     out: dict[int, dict] = {}
     for link in links:
         s = sources.get(link["source_id"], {})
         trust = s.get("trust_score")
         trust = 0.5 if trust is None else trust   # new sources start neutral
-        rec = out.setdefault(link["fact_card_id"], {"trust": 0.0, "sources": []})
+        rec = out.setdefault(link["fact_card_id"], {"trust": 0.0, "sources": [], "unrated": False})
         rec["trust"] = max(rec["trust"], trust)
         rec["sources"].append(s.get("name", "?"))
+        if (s.get("claims_evaluated") or 0) < rated_after:
+            rec["unrated"] = True
     return out
 
 
@@ -72,13 +75,16 @@ def build_inputs(db, team_cfg: dict, team_id: int, run_date: date, tickers: list
     min_trust = team_cfg.get("min_source_trust", 0.0)
     shown = []
     for c in cards:
-        rec = info.get(c["id"], {"trust": 0.5, "sources": []})
-        if rec["trust"] < min_trust:
+        rec = info.get(c["id"], {"trust": 0.5, "sources": [], "unrated": True})
+        # The trust filter only hides sources that EARNED a low score. A source nobody has judged
+        # yet sits at 0.50 by default, which would otherwise hide all news from strict teams.
+        if rec["trust"] < min_trust and not rec.get("unrated"):
             continue
         shown.append({"id": c["id"], "ticker": c["ticker"], "claim": c["claim"],
                       "direction": c["direction"], "type": c["claim_type"],
                       "horizon_days": c["horizon_days"], "confidence": c["confidence"],
                       "trust": round(rec["trust"], 2), "sources": len(rec["sources"]),
+                      "unrated": bool(rec.get("unrated")),
                       "corroborated": bool(c.get("corroborated")),
                       "published_at": c["published_at"]})
         if len(shown) >= team_cfg.get("max_fact_cards_in_prompt", 40):
