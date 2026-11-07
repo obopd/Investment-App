@@ -65,7 +65,9 @@ class Verdict(BaseModel):
     main_risk: str = Field(max_length=600)
 
 
-def validate_analyst(k: int, universe: set[str], card_ids: set[int]):
+def validate_analyst(k: int, universe: set[str], card_ids: set[int], held: set[str] | None = None):
+    held = held or set()
+
     def v(data):
         try:
             cands = [Candidate(**c) for c in data["candidates"]]
@@ -78,6 +80,10 @@ def validate_analyst(k: int, universe: set[str], card_ids: set[int]):
                 raise ValueError(f"{c.ticker} is not in the allowed ticker list")
             if c.action not in ("buy", "add", "reduce", "sell") or c.ticker in seen:
                 continue
+            if c.action in ("reduce", "sell") and c.ticker not in held:
+                continue   # can't sell what the team doesn't own (long-only): skip the debate
+            if c.action == "add" and c.ticker not in held:
+                c.action = "buy"
             seen.add(c.ticker)
             c.fact_card_ids = [i for i in c.fact_card_ids if i in card_ids]  # drop invented ids
             out.append(c)
@@ -129,7 +135,11 @@ def cards_text(cards: list[dict], ticker: str | None = None) -> str:
     if not sel:
         return "No fact cards."
     return "\n".join(f"#{c['id']} [{c['ticker'] or 'MACRO'}] {c['direction']}, {c['type']}, {c['horizon_days']}d, "
-                     f"trust {c['trust']:.2f}, {c['sources']} source(s){', CORROBORATED' if c['corroborated'] else ''}: {c['claim']}" for c in sel)
+                     f"{_trust_label(c)}, {c['sources']} source(s){', CORROBORATED' if c['corroborated'] else ''}: {c['claim']}" for c in sel)
+
+
+def _trust_label(card: dict) -> str:
+    return "trust unrated" if card.get("unrated") else f"trust {card['trust']:.2f}"
 
 
 # ---------- practice-mode stand-ins ----------
@@ -236,7 +246,7 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
                       + ("\n".join(f"- {l['text']}" for l in inputs["lessons"]) or "None yet."))
     try:
         result = llm.json("analyst", analyst_sys, analyst_prompt, ANALYST_SCHEMA,
-                          validate_analyst(k, set(allowed), card_ids), max_tokens=6000,
+                          validate_analyst(k, set(allowed), card_ids, set(pf.positions)), max_tokens=6000,
                           mock=lambda: mock_analyst(inputs, k, allowed, cfg), model_key=models.get("analyst"))
         if result is None:
             record(None, "skipped: invalid analyst output", analyst_report="The analyst's reply failed validation twice.")

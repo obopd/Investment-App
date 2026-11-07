@@ -53,10 +53,16 @@ def test_guard_raises_if_late_data_slips_in():
         check_inputs(inputs)
 
 
-def test_low_trust_sources_are_hidden():
+def test_sources_that_earned_low_trust_are_hidden():
     db = make_db()
-    db.update("sources", {"id": 1}, {"trust_score": 0.2})
+    db.update("sources", {"id": 1}, {"trust_score": 0.2, "claims_evaluated": 5})
     assert build_inputs(db, {"min_source_trust": 0.4}, 1, D, ["AAPL"])["fact_cards"] == []
+
+
+def test_unrated_sources_are_shown_even_to_strict_teams():
+    db = make_db()   # source at the default 0.50, never judged
+    cards = build_inputs(db, {"min_source_trust": 0.55}, 1, D, ["AAPL"])["fact_cards"]
+    assert [c["claim"] for c in cards] == ["before close"] and cards[0]["unrated"] is True
 
 
 def test_live_teams_never_see_practice_cards():
@@ -64,3 +70,13 @@ def test_live_teams_never_see_practice_cards():
     db.update("fact_cards", {"id": 1}, {"practice": True})
     assert build_inputs(db, {"min_source_trust": 0, "mode": "live"}, 1, D, ["AAPL"])["fact_cards"] == []
     assert len(build_inputs(db, {"min_source_trust": 0, "mode": "practice"}, 1, D, ["AAPL"])["fact_cards"]) == 1
+
+
+def test_analyst_cannot_propose_selling_what_the_team_does_not_own():
+    from arena.agents.team import validate_analyst
+    v = validate_analyst(3, {"AAPL", "MSFT", "NVDA"}, set(), held={"MSFT"})
+    _, cands = v({"market_summary": "x", "candidates": [
+        {"ticker": "NVDA", "action": "reduce", "report": "r", "fact_card_ids": []},
+        {"ticker": "MSFT", "action": "sell", "report": "r", "fact_card_ids": []},
+        {"ticker": "AAPL", "action": "add", "report": "r", "fact_card_ids": []}]})
+    assert [(c.ticker, c.action) for c in cands] == [("MSFT", "sell"), ("AAPL", "buy")]
