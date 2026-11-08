@@ -18,7 +18,9 @@ SYSTEM = (
     "You turn financial news headlines into short, checkable fact cards for a research "
     "simulation. Only use what the text says; never add outside knowledge. A claim must be "
     "about one company (ticker) or the macro economy (ticker null). Skip marketing, how-to "
-    "and lifestyle posts entirely. direction = expected effect on that stock's price relative "
+    "and lifestyle posts entirely. Skip law-firm advertisements looking for investors "
+    "('investigating claims on behalf of investors', 'class action filed, contact us', "
+    "'lead plaintiff deadline'): they are not new information about the company. direction = expected effect on that stock's price relative "
     "to the market. horizon_days = 5 for news the market reacts to quickly, 20 for slower "
     "effects. confidence = how clearly the text supports the claim (0-1)."
 )
@@ -148,7 +150,7 @@ def _prompt(batch: list[dict], source_names: dict[int, str]) -> str:
     return "\n".join(lines)
 
 
-def extract_fact_cards(db, llm, universe: set[str], cfg: dict, now) -> dict:
+def extract_fact_cards(db, llm, universe: set[str], cfg: dict, now, macro_feeds: set[str] | None = None) -> dict:
     summary = {"articles_processed": 0, "cards_new": 0, "cards_merged": 0, "skipped_budget": False}
     since = now - timedelta(days=cfg.get("max_age_days", 3))
     # Practice and live keep separate "done" markers, so going live re-reads recent articles
@@ -156,9 +158,12 @@ def extract_fact_cards(db, llm, universe: set[str], cfg: dict, now) -> dict:
     marker = "practice_extracted_at" if llm.practice else "facts_extracted_at"
     pending = db.select("articles", {marker: ("is", None), "published_at": ("gte", since)},
                         order="published_at.asc,id.asc")
-    # Only articles that can produce a usable claim: tagged companies, filings, or the Fed.
+    # Only articles that can produce a usable claim: tagged companies, filings, or market-wide
+    # news from feeds marked `macro: true` (rates, inflation, broad sell-offs...).
+    macro_feeds = macro_feeds or set()
     pending = [a for a in pending if a.get("tickers") or a.get("kind") == "filing"
-               or "federalreserve" in (a.get("url") or "")][: cfg.get("max_articles_per_run", 150)]
+               or a.get("feed") in macro_feeds or "federalreserve" in (a.get("url") or "")
+               ][: cfg.get("max_articles_per_run", 150)]
     if not pending:
         return summary
 

@@ -81,3 +81,15 @@ def test_validator_drops_outside_tickers_and_rejects_unknown_articles():
 def test_similarity():
     assert similarity("Apple beats estimates", "Apple beats estimates!") == 1
     assert similarity("Apple beats estimates", "Microsoft misses badly") == 0
+
+
+def test_market_wide_news_from_macro_feeds_is_read_too():
+    db = setup_db()
+    db.insert("articles", [{"id": 20, "source_id": 1, "url": "u20", "title": "Treasury yields jump as inflation runs hot",
+                            "tickers": [], "feed": "MarketWatch Top Stories", "published_at": NOW - timedelta(hours=2)},
+                           {"id": 21, "source_id": 1, "url": "u21", "title": "Ten tips for a cozy autumn",
+                            "tickers": [], "feed": "PR Newswire All", "published_at": NOW - timedelta(hours=2)}])
+    llm = practice_llm(db)
+    extract_fact_cards(db, llm, UNIVERSE, CFG, NOW, macro_feeds={"MarketWatch Top Stories"})
+    read = {a["id"] for a in db.select("articles") if a.get("practice_extracted_at")}
+    assert 20 in read and 21 not in read
