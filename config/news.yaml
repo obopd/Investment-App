@@ -9,8 +9,9 @@ snippet_chars: 500
 
 feeds:
   # Market news
-  - {name: MarketWatch Top Stories, url: "https://feeds.content.dowjones.io/public/rss/mw_topstories"}
-  - {name: MarketWatch MarketPulse, url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse"}
+  # macro: true -> headlines that name none of our companies are still read for economy-wide claims.
+  - {name: MarketWatch Top Stories, url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", macro: true}
+  - {name: MarketWatch MarketPulse, url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse", macro: true}
   # blocked automated access (HTTP 403) in testing, 2026-11:
   # - {name: CNBC Top News,           url: "https://www.cnbc.com/id/100003114/device/rss/rss.html"}
   # blocked automated access (HTTP 403) in testing, 2026-11:
@@ -21,7 +22,7 @@ feeds:
   # blocked automated access (HTTP 403) in testing, 2026-11:
   # - {name: GlobeNewswire Public Companies, url: "https://www.globenewswire.com/RssFeed/orgclass/1/feedTitle/GlobeNewswire%20-%20News%20about%20Public%20Companies"}
   # Macro
-  - {name: Federal Reserve Press,   url: "https://www.federalreserve.gov/feeds/press_all.xml"}
+  - {name: Federal Reserve Press,   url: "https://www.federalreserve.gov/feeds/press_all.xml", macro: true}
   # Company newsrooms
   - {name: Apple Newsroom,          url: "https://www.apple.com/newsroom/rss-feed.rss",   tickers: [AAPL]}
   - {name: Microsoft News,          url: "https://news.microsoft.com/feed/",              tickers: [MSFT]}

@@ -168,7 +168,8 @@ def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
 
     # 5. Fact cards (cheap AI model).
     if llm.available:
-        step("fact_cards", lambda: extract_fact_cards(db, llm, set(stocks), config.load("facts"), now))
+        macro = {f["name"] for f in config.load("news")["feeds"] if f.get("macro")}
+        step("fact_cards", lambda: extract_fact_cards(db, llm, set(stocks), config.load("facts"), now, macro))
 
     # 5b. Source trust: settle claims whose horizon has passed; label corroborated claims. No AI.
     def trust():

@@ -28,12 +28,12 @@ const DISCLAIMER = `<p class="note disclaimer">Experimental simulation with imag
 
 // ---------- Leaderboard ----------
 export async function leaderboard(el, setAsOf) {
-  const [rows, teams] = await Promise.all([
+  const [rows, teams, banner] = await Promise.all([
     q("leaderboard", { select: "*" }),
     q("teams", { select: "id,name,config,status,generation,parent_team_id,mutation,created_at,retired_at", order: "id.asc" }),
+    creditBanner().catch(() => ""),
   ]);
   allTeams = teams;
-  const banner = await creditBanner().catch(() => "");
   const active = teams.filter((t) => t.status === "active");
   const teamRows = rows.filter((r) => !r.is_benchmark && active.some((t) => t.id === r.team_id))
     .sort((a, b) => (b.total_return ?? -1) - (a.total_return ?? -1));
@@ -177,11 +177,14 @@ function whenLines(iso) {
 
 export async function decisions(el, setAsOf, { more = false } = {}) {
   await loadStockNames();
-  const filter = teamFilter === "all" ? {} : { team_id: `eq.${teamFilter}` };
+  const teams = await q("teams", { select: "id,name,status", order: "id.asc" });
+  const activeIds = teams.filter((t) => t.status === "active").map((t) => t.id);
+  // "All teams" means the teams playing now; retired teams (e.g. old practice teams with the
+  // same letters) stay out of the list.
+  const filter = { team_id: teamFilter === "all" ? inList(activeIds.length ? activeIds : [0]) : `eq.${teamFilter}` };
   if (!more) { decOffset = 0; decCache = []; }
-  const [rows, teams, planned, trades] = await Promise.all([
+  const [rows, planned, trades] = await Promise.all([
     q("decisions", { select: "id,team_id,date,ticker,final_action,judge_verdict,risk_result", order: "date.desc,id.desc", limit: PAGE, offset: decOffset, ...filter }),
-    q("teams", { select: "id,name,status", order: "id.asc" }),
     more ? null : q("orders", { select: "id,team_id,decision_id,ticker,side,shares,for_date,reason", status: "eq.pending", order: "for_date.asc,id.asc", ...filter }),
     more ? null : q("trades", { select: "order_id,team_id,ticker,side,shares,fill_price,executed_at", order: "id.desc", limit: 30, ...filter }),
   ]);
@@ -199,7 +202,10 @@ export async function decisions(el, setAsOf, { more = false } = {}) {
       ${[["all", "All teams"], ...active.map((t) => [String(t.id), shortTeam(t.name)])].map(([id, label]) =>
         `<button class="pill${String(teamFilter) === id ? " on" : ""}" data-team="${id}" role="tab">${esc(label)}</button>`).join("")}
     </div>`;
-  const teamLine = (id) => teamFilter === "all" ? `${esc(shortTeam(teamNames[id] || ""))} · ` : "";
+  const teamLine = (id, rest = "") => {
+    const parts = [teamFilter === "all" ? esc(shortTeam(teamNames[id] || "")) : "", rest].filter(Boolean);
+    return parts.join(" · ");
+  };
 
   const plannedHtml = !more ? `<section>
       <p class="label">Planned · next market open</p>
@@ -241,7 +247,7 @@ export async function decisions(el, setAsOf, { more = false } = {}) {
           <span class="mid">
             <span class="co">${esc(d.ticker ? stockName(d.ticker) : "Daily summary")}</span>
             <span class="act">${esc(actionText(d.final_action || ""))}</span>
-            <span class="meta">${teamLine(d.team_id)}${d.judge_verdict ? `conviction ${num(d.judge_verdict.conviction)}` : ""}</span>
+            <span class="meta">${teamLine(d.team_id, d.judge_verdict ? `conviction ${num(d.judge_verdict.conviction)}` : "")}</span>
           </span>
           <span class="chip ${actionClass(d.final_action)}">${esc(chipText(d))}</span>
         </button></li>`).join("")}
