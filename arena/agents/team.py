@@ -238,8 +238,9 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
     models = cfg.get("models") or {}   # this team's model per role (e.g. a stronger judge)
     card_ids = {c["id"] for c in inputs["fact_cards"]}
     allowed = sorted(t for t in prices if t != benchmark)  # the benchmark itself isn't traded
-    analyst_sys = prompts.ANALYST.format(k=k, style="short-term (days to weeks)" if cfg.get("holding_style") == "short" else "long-term (weeks to months)",
-                                         news_weight=cfg.get("news_weight", 0.5))
+    style = "short-term (days to weeks)" if cfg.get("holding_style") == "short" else "long-term (weeks to months)"
+    analyst_sys = prompts.ANALYST.format(k=k, style=style, news_weight=cfg.get("news_weight", 0.5))
+    judge_sys = prompts.JUDGE.format(style=style, news_weight=cfg.get("news_weight", 0.5))
     analyst_prompt = (f"Decision date: {run_date} (after the close).\nAllowed tickers: {', '.join(allowed)}\n\n"
                       f"PORTFOLIO\n{portfolio_text(pf, closes)}\n\nPRICES\n{prices_text(prices)}\n\n"
                       f"FACT CARDS\n{cards_text(inputs['fact_cards'])}\n\nQUANT MODEL\n{quant_text(quant)}\n\nLESSONS\n"
@@ -268,7 +269,7 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
             bear = llm.text("bear", prompts.BEAR, case, max_tokens=2000, model_key=models.get("bear"),
                             mock=lambda c=c: f"[practice] Case against {c.action} {config.stock_name(c.ticker)}: evidence is thin.")
             judge_prompt = case + f"\n\nBULL\n{bull or '(missing)'}\n\nBEAR\n{bear or '(missing)'}\n\nReturn the verdict for {c.ticker}."
-            verdict = llm.json("judge", prompts.JUDGE, judge_prompt, JUDGE_SCHEMA, validate_judge(c.ticker),
+            verdict = llm.json("judge", judge_sys, judge_prompt, JUDGE_SCHEMA, validate_judge(c.ticker),
                                max_tokens=6000, mock=lambda c=c: mock_verdict(c), model_key=models.get("judge"))
             if verdict is None:
                 record(c.ticker, "skipped: invalid judge output", c.report, bull, bear)

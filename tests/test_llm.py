@@ -128,3 +128,11 @@ def test_provider_error_stops_ai_for_the_run_and_nothing_is_marked_done():
     assert llm.available is False
     with pytest.raises(AIUnavailable):
         llm.json("judge", "s", "p", {}, positive)
+
+
+def test_judge_prompt_carries_team_style_and_conviction_scale():
+    from arena.agents import prompts
+    text = prompts.JUDGE.format(style="short-term (days to weeks)", news_weight=0.3)
+    assert "short-term" in text and "30% news" in text
+    assert "0.5 = a coin flip" in text and "SMALLER target_weight" in text
+    assert "unrated source is unknown, not bad" in prompts.COMMON
