@@ -23,7 +23,7 @@
 - Simulator (`arena/sim`): fills at next open, 0.05% fee + 0.05% slippage, whole shares, buys reduced to fit cash, sells before buys.
 - Equity, SPY buy-and-hold benchmark, leaderboard (return, Sharpe, max drawdown, trades).
 - Dashboard PWA (`/dashboard`): Leaderboard, Decisions (tap for analyst/bull/bear/judge/risk), System (runs, errors, AI spend vs cap). Light/dark, installable. Published by the "Dashboard" workflow.
-- 116 tests passing, including a multi-day simulation.
+- 117 tests passing, including a multi-day simulation.
 - Teams only decide after 4pm New York; a run started during market hours collects data and fills orders but skips decisions.
 
 ## Done — Phase 3 (post-mortems and lesson book)
@@ -73,6 +73,8 @@
 - 2026-11-07 first real AI run (Nov 6 close): 18 calls, $0.03, all teams held. Fixes after it: sources with fewer than 3 judged claims count as "unrated" and pass a team's trust filter (team B's 0.55 bar had hidden all news, since every source starts at 0.50); the analyst can no longer propose selling a stock the team doesn't own (dropped before the debate, saving calls).
 
 - 2026-11-08 full review (tests, practice run on real news, real-database audit, live dashboard check): untagged headlines from feeds marked `macro: true` (MarketWatch, Fed) are now read for economy-wide claims (about 12% of headlines were used before); law-firm investor solicitations are skipped; "All teams" in the dashboard shows only active teams (old practice decisions used the same letters); leaderboard loads its parts in parallel; no stray "·" after team names.
+
+- 2026-11-10: two live runs, every decision ended as "hold". Cause: the judge said "buy a small starter position" with conviction 0.4 (it used conviction for size), and the team minimums (0.6-0.7) turned those into holds; the judge also didn't know the team's style and the shared prompt nudged towards holding. Fix: the judge prompt defines conviction (0.5 = coin flip; caution goes into a smaller target_weight), gets the team's style, unrated sources are "unknown, not bad", cash is described as a bet against SPY; minimum conviction now A 0.55, B 0.6, C 0.6.
 
 ## Next
 All six phases are built. Remaining: switch to live AI when ready (see docs/SETUP.md section 7), then let it run for months before judging results.
