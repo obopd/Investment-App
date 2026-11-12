@@ -76,6 +76,8 @@
 
 - 2026-11-10: two live runs, every decision ended as "hold". Cause: the judge said "buy a small starter position" with conviction 0.4 (it used conviction for size), and the team minimums (0.6-0.7) turned those into holds; the judge also didn't know the team's style and the shared prompt nudged towards holding. Fix: the judge prompt defines conviction (0.5 = coin flip; caution goes into a smaller target_weight), gets the team's style, unrated sources are "unknown, not bad", cash is described as a bet against SPY; minimum conviction now A 0.55, B 0.6, C 0.6.
 
+- 2026-11-12: after the conviction fix, team A traded (bought Amazon and Walmart Nov 11, Advanced Micro Devices queued for Nov 12). B and C judges chose "buy" at 0.55-0.58 three times and were blocked by their 0.60 minimum, so B and C now use 0.55 like A.
+
 ## Next
 All six phases are built. Remaining: switch to live AI when ready (see docs/SETUP.md section 7), then let it run for months before judging results.
 
