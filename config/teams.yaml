@@ -24,7 +24,7 @@ teams:
     holding_style: short
     news_weight: 0.8              # leans on fresh news and filings
     min_source_trust: 0.55        # stricter about who it listens to
-    min_conviction: 0.6
+    min_conviction: 0.55
     max_candidates_per_day: 3
     fact_card_lookback_days: 4
     max_fact_cards_in_prompt: 50
@@ -37,7 +37,7 @@ teams:
     holding_style: long           # weeks to months, fewer trades
     news_weight: 0.5
     min_source_trust: 0.5
-    min_conviction: 0.6
+    min_conviction: 0.55
     max_candidates_per_day: 2
     fact_card_lookback_days: 14
     max_fact_cards_in_prompt: 40
