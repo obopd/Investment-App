@@ -148,7 +148,8 @@ def run(run_date: date, db, *, dry_run: bool = False, force: bool = False,
         step("prices", prices)
 
     # 3. Fill pending orders at today's open.
-    step("orders_filled", lambda: {t["name"]: executor.execute_orders(db, t["id"], run_date, risk_cfg, bench)
+    step("orders_filled", lambda: {t["name"]: executor.execute_orders(db, t["id"], run_date, risk_cfg, bench,
+                                                                      config.focus_tickers(t["config"]))
                                    for t in teams})
 
     # 4. News and filings.

@@ -9,7 +9,7 @@ from arena.agents import prompts
 from arena.agents.inputs import build_inputs
 from arena.lookahead import LookAheadError
 from arena.llm.budget import AIUnavailable, BudgetExceeded
-from arena.risk.engine import evaluate, stop_loss_sells
+from arena.risk.engine import RiskResult, evaluate, stop_loss_sells
 from arena.sim.executor import next_order_date
 
 # ---------- schemas (structured output + validation) ----------
@@ -65,7 +65,8 @@ class Verdict(BaseModel):
     main_risk: str = Field(max_length=600)
 
 
-def validate_analyst(k: int, universe: set[str], card_ids: set[int], held: set[str] | None = None):
+def validate_analyst(k: int, universe: set[str], card_ids: set[int], held: set[str] | None = None,
+                     focus: set[str] | None = None):
     held = held or set()
 
     def v(data):
@@ -84,6 +85,8 @@ def validate_analyst(k: int, universe: set[str], card_ids: set[int], held: set[s
                 continue   # can't sell what the team doesn't own (long-only): skip the debate
             if c.action == "add" and c.ticker not in held:
                 c.action = "buy"
+            if c.action in ("buy", "add") and focus is not None and c.ticker not in focus:
+                continue   # outside the team's focus: it may only sell what it already holds there
             seen.add(c.ticker)
             c.fact_card_ids = [i for i in c.fact_card_ids if i in card_ids]  # drop invented ids
             out.append(c)
@@ -176,7 +179,7 @@ def mock_verdict(c: Candidate):
 
 
 # ---------- the daily process ----------
-def quant_text(quant: dict | None) -> str:
+def quant_text(quant: dict | None, only: set[str] | None = None) -> str:
     if not quant or not quant.get("scores"):
         return "Not available."
     ev = quant.get("evaluation") or {}
@@ -185,6 +188,8 @@ def quant_text(quant: dict | None) -> str:
              f"Historical skill is weak (walk-forward IC {ic:+.3f}); use as a minor hint." if ic is not None else
              "Predicted 20-day return vs SPY from price patterns only (rank 1 = most favourable). Use as a minor hint."]
     for t, s in sorted(quant["scores"].items(), key=lambda kv: kv[1]["rank"]):
+        if only is not None and t not in only:
+            continue
         lines.append(f"{s['rank']:>2}. {t} {s['pred'] * 100:+.2f}%")
     return "\n".join(lines)
 
@@ -237,17 +242,24 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
     k = cfg.get("max_candidates_per_day", 3)
     models = cfg.get("models") or {}   # this team's model per role (e.g. a stronger judge)
     card_ids = {c["id"] for c in inputs["fact_cards"]}
-    allowed = sorted(t for t in prices if t != benchmark)  # the benchmark itself isn't traded
+    # The team's focus: it may buy only these; stocks it already holds stay sellable.
+    focus = config.focus_tickers(cfg)
+    allowed = sorted(t for t in prices if t != benchmark and (t in focus or t in pf.positions))
+    focus_note = ("" if focus >= set(prices) - {benchmark} else
+                  f"Team focus: you may BUY only {', '.join(sorted(focus))}. Stocks already held outside "
+                  "the focus may only be reduced or sold.\n")
     style = "short-term (days to weeks)" if cfg.get("holding_style") == "short" else "long-term (weeks to months)"
     analyst_sys = prompts.ANALYST.format(k=k, style=style, news_weight=cfg.get("news_weight", 0.5))
     judge_sys = prompts.JUDGE.format(style=style, news_weight=cfg.get("news_weight", 0.5))
-    analyst_prompt = (f"Decision date: {run_date} (after the close).\nAllowed tickers: {', '.join(allowed)}\n\n"
-                      f"PORTFOLIO\n{portfolio_text(pf, closes)}\n\nPRICES\n{prices_text(prices)}\n\n"
-                      f"FACT CARDS\n{cards_text(inputs['fact_cards'])}\n\nQUANT MODEL\n{quant_text(quant)}\n\nLESSONS\n"
+    shown_prices = {t: s for t, s in prices.items() if t in allowed or t == benchmark}
+    shown_cards = [c for c in inputs["fact_cards"] if c["ticker"] in allowed or c["ticker"] is None]
+    analyst_prompt = (f"Decision date: {run_date} (after the close).\nAllowed tickers: {', '.join(allowed)}\n{focus_note}\n"
+                      f"PORTFOLIO\n{portfolio_text(pf, closes)}\n\nPRICES\n{prices_text(shown_prices)}\n\n"
+                      f"FACT CARDS\n{cards_text(shown_cards)}\n\nQUANT MODEL\n{quant_text(quant, set(allowed))}\n\nLESSONS\n"
                       + ("\n".join(f"- {l['text']}" for l in inputs["lessons"]) or "None yet."))
     try:
         result = llm.json("analyst", analyst_sys, analyst_prompt, ANALYST_SCHEMA,
-                          validate_analyst(k, set(allowed), card_ids, set(pf.positions)), max_tokens=6000,
+                          validate_analyst(k, set(allowed), card_ids, set(pf.positions), focus), max_tokens=6000,
                           mock=lambda: mock_analyst(inputs, k, allowed, cfg), model_key=models.get("analyst"))
         if result is None:
             record(None, "skipped: invalid analyst output", analyst_report="The analyst's reply failed validation twice.")
@@ -275,6 +287,8 @@ def run_team(db, llm, team: dict, run_date: date, stocks: list[str], benchmark: 
                 record(c.ticker, "skipped: invalid judge output", c.report, bull, bear)
                 continue
             risk = evaluate(verdict, pf, closes, risk_cfg, cfg.get("min_conviction", 0.6), new_positions)
+            if risk.side == "buy" and c.ticker not in focus:   # code enforces the focus, not just the prompt
+                risk = RiskResult("vetoed", None, 0, "outside the team's focus sectors")
             if risk.side:
                 final = f"{risk.side} {risk.shares}"
             else:

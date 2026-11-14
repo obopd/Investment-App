@@ -51,11 +51,18 @@ def save_portfolio(db, team_id: int, pf: Portfolio) -> None:
 
 
 # ---------- order execution ----------
-def execute_orders(db, team_id: int, run_date: date, risk_cfg: dict, benchmark: str) -> dict:
-    """Fill this team's pending orders whose day has come, at that day's open."""
+def execute_orders(db, team_id: int, run_date: date, risk_cfg: dict, benchmark: str,
+                   focus: set[str] | None = None) -> dict:
+    """Fill this team's pending orders whose day has come, at that day's open. Buys outside the
+    team's focus (e.g. placed before the focus changed) are cancelled instead."""
     summary = {"filled": 0, "cancelled": 0, "waiting": 0}
     orders = db.select("orders", {"team_id": team_id, "status": "pending",
                                   "for_date": ("lte", run_date)}, order="id.asc")
+    if focus is not None:
+        for o in [o for o in orders if o["side"] == "buy" and o["ticker"] not in focus]:
+            db.update("orders", {"id": o["id"]}, {"status": "cancelled", "reason": "outside the team's focus sectors"})
+            summary["cancelled"] += 1
+        orders = [o for o in orders if not (o["side"] == "buy" and o["ticker"] not in focus)]
     if not orders:
         return summary
     pf = load_portfolio(db, team_id)

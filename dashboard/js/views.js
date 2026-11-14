@@ -128,6 +128,7 @@ async function showTeam(id, boardRows) {
       ${trades.length ? trades.map((x) => kv(`<span class="${x.side === "buy" ? "up" : "down"}">${x.side === "buy" ? "Bought" : "Sold"}</span> ${esc(stockName(x.ticker))} · ${day(x.executed_at)}`, `${x.shares} at ${money2(x.fill_price)}`)).join("") : `<p class="note">No trades yet.</p>`}
     </section>
     <section><p class="label">Settings</p>
+      ${kv("Focus", esc(Array.isArray(c.focus_sectors) ? c.focus_sectors.join(", ") : "all 30 stocks"))}
       ${Object.entries(SETTING_LABELS).filter(([k]) => k in c).map(([k, label]) => kv(label, esc(c[k]))).join("")}
       ${c.models ? kv("Judge model", esc(c.models.judge || "default")) : ""}
     </section>
