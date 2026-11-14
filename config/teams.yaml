@@ -2,6 +2,8 @@
 # C holds for weeks to months. Monthly evolution later replaces the worst team with a mutated
 # copy of the best one; those children live only in the database, not in this file.
 # models: which entry of config/models.yaml each role uses (overrides the default "roles" there).
+# focus_sectors: the only sectors a team may BUY (sectors as in universe.yaml); 'all' = any stock.
+#   Stocks it already owns outside its focus can still be sold. Enforced in code.
 teams:
   # key: stable identity (never change it). name: what the dashboard shows (safe to change).
   # formerly: old names, so renaming keeps the same team instead of starting a new one.
@@ -12,6 +14,7 @@ teams:
     news_weight: 0.3              # 0 = price trend only, 1 = news only
     min_source_trust: 0.4         # fact cards from sources below this are hidden from the team
     min_conviction: 0.55          # judge verdicts below this become "hold" (0.5 = coin flip)
+    focus_sectors: [Technology, Communication Services, Consumer Discretionary]   # tech & growth
     max_candidates_per_day: 3
     fact_card_lookback_days: 7
     max_fact_cards_in_prompt: 40
@@ -25,6 +28,7 @@ teams:
     news_weight: 0.8              # leans on fresh news and filings
     min_source_trust: 0.55        # stricter about who it listens to
     min_conviction: 0.55
+    focus_sectors: all            # goes wherever the news is
     max_candidates_per_day: 3
     fact_card_lookback_days: 4
     max_fact_cards_in_prompt: 50
@@ -38,6 +42,7 @@ teams:
     news_weight: 0.5
     min_source_trust: 0.5
     min_conviction: 0.55
+    focus_sectors: [Financials, Health Care, Consumer Staples, Energy, Industrials, Utilities]   # steady companies
     max_candidates_per_day: 2
     fact_card_lookback_days: 14
     max_fact_cards_in_prompt: 40

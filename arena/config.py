@@ -22,6 +22,15 @@ def stock_name(ticker: str) -> str:
     return ticker
 
 
+def focus_tickers(team_cfg: dict) -> set[str]:
+    """Stocks a team may buy, from its focus_sectors ('all' or missing = the whole universe)."""
+    stocks = load("universe")["stocks"]
+    sectors = team_cfg.get("focus_sectors", "all")
+    if sectors in (None, "all") or sectors == ["all"]:
+        return {s["ticker"] for s in stocks}
+    return {s["ticker"] for s in stocks if s["sector"] in set(sectors)}
+
+
 def universe_tickers(include_benchmark: bool = True) -> list[str]:
     u = load("universe")
     tickers = [s["ticker"] for s in u["stocks"]]
